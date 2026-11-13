@@ -17,6 +17,7 @@
     "@clipforge/database": "workspace:*",
     "@clipforge/shared-types": "workspace:*",
     "@clipforge/validation": "workspace:*",
+    "@clipforge/video-worker": "workspace:*",
     "bcryptjs": "^3.0.3",
     "bullmq": "^6.7.5",
     "cookie-parser": "^1.4.7",

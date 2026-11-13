@@ -54,6 +54,10 @@ export class QueueService {
     }
   }
 
+  public isRedisAvailable(): boolean {
+    return this.isRedisConnected;
+  }
+
   /**
    * Enqueues project analysis job with tier priority and duplicate prevention.
    */

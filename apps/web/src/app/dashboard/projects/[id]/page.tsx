@@ -41,6 +41,37 @@ export default function ProjectWorkspacePage() {
   // Selected clip for lazy-loaded editor modal
   const [editingClip, setEditingClip] = React.useState<ClipDetailDTO | null>(null);
   const [isEditorOpen, setIsEditorOpen] = React.useState(false);
+  const [isStartingJob, setIsStartingJob] = React.useState(false);
+
+  const handleStartClipping = async () => {
+    setIsStartingJob(true);
+    try {
+      await fetchApi(`/api/v1/projects/${projectId}/jobs`, {
+        method: "POST",
+        body: JSON.stringify({
+          projectId,
+          targetAspect: project?.targetAspect,
+          minClipDuration: project?.minClipDuration || 15,
+          maxClipDuration: project?.maxClipDuration || 60,
+          maxClipsToGen: 10,
+        }),
+      });
+      setProject((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: ProjectStatus.PROCESSING,
+              activeJobProgress: 10,
+              activeJobStage: "VALIDATING_SOURCE" as unknown as typeof prev.activeJobStage,
+            }
+          : prev,
+      );
+    } catch (err) {
+      alert(getErrorMessage(err, "Failed to start clipping"));
+    } finally {
+      setIsStartingJob(false);
+    }
+  };
 
   const loadProject = React.useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -238,6 +269,22 @@ export default function ProjectWorkspacePage() {
               <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
             </div>
           </div>
+
+          {project.status !== ProjectStatus.COMPLETED && !isProcessing && (
+            <button
+              type="button"
+              onClick={handleStartClipping}
+              disabled={isStartingJob}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-950 text-xs font-semibold hover:bg-zinc-800 dark:hover:bg-white active:scale-95 transition-all shadow-xs disabled:opacity-50 self-start sm:self-auto"
+            >
+              {isStartingJob ? (
+                <CircleNotch size={14} className="animate-spin" />
+              ) : (
+                <Play size={13} weight="fill" />
+              )}
+              <span>Generate AI Clips</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -329,18 +376,44 @@ export default function ProjectWorkspacePage() {
 
       {/* Clip Gallery Grid */}
       {filteredClips.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#181818] p-12 text-center">
-          <FilmSlate size={36} className="mx-auto text-zinc-400 mb-2" />
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
-            {isProcessing ? "Generating clips..." : "No clips found"}
-          </h3>
-          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-            {isProcessing
-              ? "Your source video is currently in the AI processing queue. Extracted clips will appear here shortly."
-              : searchQuery
-              ? `No clips matching "${searchQuery}". Try a different search term.`
-              : "No clips match the selected category filter."}
-          </p>
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#181818] p-10 text-center space-y-4">
+          <FilmSlate size={40} className="mx-auto text-zinc-400" />
+          <div>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
+              {isProcessing
+                ? "Generating AI short clips..."
+                : clips.length === 0
+                ? "Ready to extract viral clips"
+                : "No clips match filter"}
+            </h3>
+            <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
+              {isProcessing
+                ? "ClipForge AI is transcribing audio, scoring high-retention hooks, reframing aspect ratios, and burning dynamic captions."
+                : clips.length === 0
+                ? "Click below to run the AI processing pipeline. ClipForge will detect highest-hook moments, crop to 9:16 vertical, and burn viral captions automatically."
+                : searchQuery
+                ? `No clips matching "${searchQuery}". Try a different keyword.`
+                : "No clips found for this category."}
+            </p>
+          </div>
+
+          {!isProcessing && clips.length === 0 && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleStartClipping}
+                disabled={isStartingJob}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-950 text-xs font-semibold hover:bg-zinc-800 dark:hover:bg-white active:scale-95 transition-all shadow-xs disabled:opacity-50"
+              >
+                {isStartingJob ? (
+                  <CircleNotch size={14} className="animate-spin" />
+                ) : (
+                  <Play size={14} weight="fill" />
+                )}
+                <span>Generate AI Clips Now</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

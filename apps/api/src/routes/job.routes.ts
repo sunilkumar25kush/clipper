@@ -6,7 +6,7 @@ export const jobRouter: Router = Router();
 
 // Project processing initiation & event streams
 jobRouter.post(
-  "/projects/:projectId/process",
+  ["/projects/:projectId/process", "/projects/:projectId/jobs"],
   requireAuth,
   (req, res, next) => jobController.create(req, res, next),
 );

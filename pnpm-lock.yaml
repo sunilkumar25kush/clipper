@@ -247,6 +247,9 @@ importers:
       '@clipforge/validation':
         specifier: workspace:*
         version: link:../../packages/validation
+      '@clipforge/video-worker':
+        specifier: workspace:*
+        version: link:../../services/video-worker
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3

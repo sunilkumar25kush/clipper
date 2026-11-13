@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { X, CircleNotch, WarningCircle, FilmStrip, Link as LinkIcon, UploadSimple } from "phosphor-react";
 import { fetchApi, ApiError } from "@/lib/api-client";
 import { VideoProjectDTO, AspectRatio } from "@clipforge/shared-types";
@@ -13,13 +14,14 @@ interface CreateProjectModalProps {
 }
 
 export function CreateProjectModal({ isOpen, onClose, onCreated }: CreateProjectModalProps) {
+  const router = useRouter();
   const [title, setTitle] = React.useState("");
-  const [sourceType, setSourceType] = React.useState<"FILE_UPLOAD" | "AUTHORIZED_URL">("AUTHORIZED_URL");
+  const [sourceType, setSourceType] = React.useState<"FILE_UPLOAD" | "AUTHORIZED_URL">("FILE_UPLOAD");
   const [sourceUrl, setSourceUrl] = React.useState("");
   const [targetAspect, setTargetAspect] = React.useState<"RATIO_9_16" | "RATIO_16_9" | "RATIO_1_1">("RATIO_9_16");
   const [minClipDuration, setMinClipDuration] = React.useState(15);
   const [maxClipDuration, setMaxClipDuration] = React.useState(60);
-  const [rightsAttested, setRightsAttested] = React.useState(false);
+  const [rightsAttested, setRightsAttested] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -35,7 +37,7 @@ export function CreateProjectModal({ isOpen, onClose, onCreated }: CreateProject
     }
 
     if (sourceType === "AUTHORIZED_URL" && !sourceUrl.trim()) {
-      setError("Please enter a valid YouTube or video URL.");
+      setError("Please enter a valid video URL.");
       return;
     }
 
@@ -65,12 +67,28 @@ export function CreateProjectModal({ isOpen, onClose, onCreated }: CreateProject
         }),
       });
 
+      // Automatically trigger clipping job
+      try {
+        await fetchApi(`/api/v1/projects/${newProject.id}/jobs`, {
+          method: "POST",
+          body: JSON.stringify({
+            projectId: newProject.id,
+            targetAspect,
+            minClipDuration,
+            maxClipDuration,
+            maxClipsToGen: 10,
+          }),
+        });
+      } catch (jobErr) {
+        console.warn("Auto-trigger job warning:", jobErr);
+      }
+
       onCreated(newProject);
       onClose();
       // Reset form
       setTitle("");
       setSourceUrl("");
-      setRightsAttested(false);
+      router.push(`/dashboard/projects/${newProject.id}`);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -210,9 +228,24 @@ export function CreateProjectModal({ isOpen, onClose, onCreated }: CreateProject
                 minClipDuration={minClipDuration}
                 maxClipDuration={maxClipDuration}
                 rightsAttested={rightsAttested}
-                onUploadSuccess={(createdProject) => {
+                onUploadSuccess={async (createdProject) => {
+                  try {
+                    await fetchApi(`/api/v1/projects/${createdProject.id}/jobs`, {
+                      method: "POST",
+                      body: JSON.stringify({
+                        projectId: createdProject.id,
+                        targetAspect,
+                        minClipDuration,
+                        maxClipDuration,
+                        maxClipsToGen: 10,
+                      }),
+                    });
+                  } catch (jobErr) {
+                    console.warn("Auto-trigger job warning:", jobErr);
+                  }
                   onCreated(createdProject);
                   onClose();
+                  router.push(`/dashboard/projects/${createdProject.id}`);
                 }}
                 onCancel={onClose}
               />
