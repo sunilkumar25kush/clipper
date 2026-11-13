@@ -42,14 +42,14 @@ app.get("/api/v1/health", (_req: Request, res: Response): void => {
   });
 });
 
+// Video Upload & Storage routes (Mounted first so media streaming /storage does not get intercepted by projectRouter middleware)
+app.use("/api/v1/videos", videoRouter);
+
 // Authentication routes
 app.use("/api/v1/auth", authRouter);
 
 // Project & Dashboard routes
 app.use("/api/v1", projectRouter);
-
-// Video Upload & Storage routes
-app.use("/api/v1/videos", videoRouter);
 
 // Background Job & Real-time Event routes
 app.use("/api/v1", jobRouter);

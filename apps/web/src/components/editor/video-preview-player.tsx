@@ -146,7 +146,11 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
             ref={videoRef}
             src={videoUrl}
             playsInline
+            preload="auto"
+            crossOrigin="anonymous"
             muted={isMuted}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
             onTimeUpdate={() => {
               if (videoRef.current) {
                 onTimeUpdate(videoRef.current.currentTime);

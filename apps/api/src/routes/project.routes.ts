@@ -4,7 +4,7 @@ import { requireAuth } from "../middlewares/auth.js";
 
 export const projectRouter: Router = Router();
 
-projectRouter.use(requireAuth);
+projectRouter.use(["/dashboard", "/projects", "/clips"], requireAuth);
 
 projectRouter.get("/dashboard/metrics", (req, res, next) => {
   projectController.getDashboardMetrics(req, res, next);

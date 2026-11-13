@@ -24,13 +24,30 @@ export interface PresignedDownloadOptions {
   expiresInSeconds?: number;
 }
 
+function findWorkspaceRoot(startDir: string = process.cwd()): string {
+  let curr = startDir;
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(curr, "pnpm-workspace.yaml"))) {
+      return curr;
+    }
+    const parent = path.dirname(curr);
+    if (parent === curr) break;
+    curr = parent;
+  }
+  return startDir;
+}
+
 export class StorageService {
   private s3Client: S3Client | null = null;
   private isCloudStorageConfigured = false;
   private localUploadDir: string;
 
   constructor() {
-    this.localUploadDir = path.resolve(process.cwd(), config.storage.localUploadDir);
+    const rootDir = findWorkspaceRoot();
+    const configDir = config.storage.localUploadDir;
+    this.localUploadDir = path.isAbsolute(configDir)
+      ? configDir
+      : path.resolve(rootDir, configDir.replace(/^\.\//, ""));
 
     const { accessKeyId, secretAccessKey, endpoint, region, forcePathStyle } = config.storage;
 
@@ -129,12 +146,28 @@ export class StorageService {
    * Resolves safe absolute path for local files with directory traversal protection.
    */
   public getLocalFilePath(storageKey: string): string | null {
-    const safeKey = path.normalize(storageKey).replace(/^(\.\.(\/|\\|$))+/, "");
-    const localPath = path.join(this.localUploadDir, safeKey);
-    if (!localPath.startsWith(this.localUploadDir)) {
-      return null;
+    let rawKey = storageKey;
+    try {
+      rawKey = decodeURIComponent(storageKey);
+    } catch {}
+    const safeKey = path.normalize(rawKey).replace(/^(\.\.(\/|\\|$))+/, "");
+
+    const candidates = [
+      path.join(this.localUploadDir, safeKey),
+      path.resolve(findWorkspaceRoot(), "uploads", safeKey),
+      path.resolve(process.cwd(), "uploads", safeKey),
+      path.resolve(process.cwd(), "../../uploads", safeKey),
+      path.resolve(process.cwd(), "../../services/video-worker/uploads", safeKey),
+      path.resolve(findWorkspaceRoot(), "services/video-worker/uploads", safeKey),
+    ];
+
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        return c;
+      }
     }
-    return fs.existsSync(localPath) ? localPath : null;
+
+    return null;
   }
 
   /**

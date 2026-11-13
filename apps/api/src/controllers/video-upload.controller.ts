@@ -79,14 +79,19 @@ export class VideoUploadController {
 
   public async serveStorageFile(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const storageKey = req.params.storageKey;
-      if (!storageKey) {
+      const rawKey = req.params.storageKey || req.params[0] || (req.params as Record<string, string>)["0"];
+      if (!rawKey) {
         res.status(400).json({
           success: false,
           error: { code: "BAD_REQUEST", message: "storageKey is required" },
         });
         return;
       }
+
+      let storageKey = rawKey;
+      try {
+        storageKey = decodeURIComponent(rawKey);
+      } catch {}
 
       if (storageService.isCloud()) {
         const downloadUrl = await storageService.getDownloadPresignedUrl({ storageKey });
@@ -125,6 +130,7 @@ export class VideoUploadController {
           "Accept-Ranges": "bytes",
           "Content-Length": chunksize,
           "Content-Type": contentType,
+          "Access-Control-Allow-Origin": "*",
         });
         fileStream.pipe(res);
       } else {
@@ -132,6 +138,7 @@ export class VideoUploadController {
           "Content-Length": stat.size,
           "Content-Type": contentType,
           "Accept-Ranges": "bytes",
+          "Access-Control-Allow-Origin": "*",
         });
         fs.createReadStream(filePath).pipe(res);
       }

@@ -8,6 +8,19 @@ export interface UploadResult {
   fileSizeBytes: bigint;
 }
 
+function findWorkspaceRoot(startDir: string = process.cwd()): string {
+  let curr = startDir;
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(curr, "pnpm-workspace.yaml"))) {
+      return curr;
+    }
+    const parent = path.dirname(curr);
+    if (parent === curr) break;
+    curr = parent;
+  }
+  return startDir;
+}
+
 export class StorageUploader {
   private s3Client: S3Client | null = null;
   private bucketName: string;
@@ -15,7 +28,11 @@ export class StorageUploader {
 
   constructor() {
     this.bucketName = process.env.STORAGE_BUCKET_NAME || "clipforge-media";
-    this.localDir = path.resolve(process.cwd(), process.env.STORAGE_LOCAL_DIR || "uploads");
+    const rootDir = findWorkspaceRoot();
+    const configDir = process.env.STORAGE_LOCAL_DIR || "uploads";
+    this.localDir = path.isAbsolute(configDir)
+      ? configDir
+      : path.resolve(rootDir, configDir.replace(/^\.\//, ""));
 
     const accessKeyId = process.env.STORAGE_ACCESS_KEY_ID || "";
     const secretAccessKey = process.env.STORAGE_SECRET_ACCESS_KEY || "";
