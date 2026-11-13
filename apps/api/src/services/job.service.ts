@@ -20,6 +20,7 @@ import {
   AssWordToken,
   SubtitlePreset,
   CaptionPosition,
+  metadataExtractor,
 } from "@clipforge/video-worker";
 import { AppError } from "../middlewares/error.js";
 import { queueService } from "./queue.service.js";
@@ -552,66 +553,81 @@ export class JobService {
       // 6. Stage: RENDERING (FFmpeg cutting, 9:16 smart cropping, ASS subtitles, thumbnails)
       await this.updateJobStage(jobId, projectId, ProcessingState.RENDERING, 80, "Reframing to 9:16 vertical and burning dynamic word-level subtitles...");
 
-      const candidates = [
-        {
-          start: 0.5,
-          end: 4.8,
+      const meta = await metadataExtractor.extract(localSourcePath).catch(() => ({ durationSeconds: 30 }));
+      const videoDuration = meta.durationSeconds > 0 ? meta.durationSeconds : 30;
+
+      // Dynamically calculate clip boundaries matching project constraints (min 15s, max 60s)
+      const minDur = Math.max(10, project.minClipDuration || 15);
+      const maxDur = Math.min(videoDuration, Math.max(minDur + 5, project.maxClipDuration || 60));
+      const targetClipDuration = Math.min(maxDur, Math.max(minDur, Math.floor(videoDuration / 3)));
+
+      const candidates: Array<{
+        start: number;
+        end: number;
+        title: string;
+        category: string;
+        reason: string;
+        scores: { hook: number; engagement: number; context: number; overall: number };
+        focusXNormalized: number;
+      }> = [];
+
+      if (videoDuration >= targetClipDuration * 2) {
+        candidates.push({
+          start: 0,
+          end: targetClipDuration,
           title: "The #1 Reason Most Creators Fail Early",
           category: "HOOK",
-          reason: "Opens with a contrarian question in the first 2 seconds that grabs viewer attention.",
+          reason: "Opens with a contrarian question that grabs viewer attention.",
           scores: { hook: 95, engagement: 91, context: 89, overall: 92 },
           focusXNormalized: 0.5,
-        },
-        {
-          start: 4.8,
-          end: 9.6,
+        });
+        candidates.push({
+          start: targetClipDuration,
+          end: Math.min(videoDuration, targetClipDuration * 2),
           title: "The 3-Step Viral Framework",
           category: "EDUCATIONAL",
           reason: "Delivers a structured, actionable breakdown with zero fluff.",
           scores: { hook: 88, engagement: 86, context: 92, overall: 89 },
           focusXNormalized: 0.5,
-        },
-        {
-          start: 9.6,
-          end: 14.5,
-          title: "Consistency Always Outperforms Talent",
-          category: "MOTIVATIONAL",
-          reason: "Strong emotional payoff and definitive call to action.",
-          scores: { hook: 87, engagement: 88, context: 85, overall: 87 },
+        });
+        if (videoDuration >= targetClipDuration * 3) {
+          candidates.push({
+            start: targetClipDuration * 2,
+            end: Math.min(videoDuration, targetClipDuration * 3),
+            title: "Consistency Always Outperforms Talent",
+            category: "MOTIVATIONAL",
+            reason: "Strong emotional payoff and definitive call to action.",
+            scores: { hook: 87, engagement: 88, context: 85, overall: 87 },
+            focusXNormalized: 0.5,
+          });
+        }
+      } else {
+        candidates.push({
+          start: 0,
+          end: videoDuration,
+          title: project.title || "Featured High-Impact Clip",
+          category: "HOOK",
+          reason: "Highlights key moments across the source clip.",
+          scores: { hook: 92, engagement: 90, context: 91, overall: 91 },
           focusXNormalized: 0.5,
-        },
-      ];
+        });
+      }
 
-      const sampleWords: AssWordToken[] = [
-        { word: "Why", startSeconds: 0.5, endSeconds: 0.9, probability: 0.98 },
-        { word: "do", startSeconds: 0.95, endSeconds: 1.2, probability: 0.99 },
-        { word: "ninety", startSeconds: 1.25, endSeconds: 1.7, probability: 0.99 },
-        { word: "percent", startSeconds: 1.75, endSeconds: 2.3, probability: 0.98 },
-        { word: "of", startSeconds: 2.35, endSeconds: 2.6, probability: 0.97 },
-        { word: "creators", startSeconds: 2.65, endSeconds: 3.2, probability: 0.99 },
-        { word: "quit", startSeconds: 3.25, endSeconds: 3.8, probability: 0.98 },
-        { word: "too", startSeconds: 3.85, endSeconds: 4.2, probability: 0.97 },
-        { word: "early?", startSeconds: 4.25, endSeconds: 4.7, probability: 0.99 },
-
-        { word: "Here", startSeconds: 4.9, endSeconds: 5.2, probability: 0.98 },
-        { word: "is", startSeconds: 5.25, endSeconds: 5.5, probability: 0.99 },
-        { word: "the", startSeconds: 5.55, endSeconds: 5.8, probability: 0.99 },
-        { word: "three", startSeconds: 5.85, endSeconds: 6.3, probability: 0.99 },
-        { word: "step", startSeconds: 6.35, endSeconds: 6.8, probability: 0.98 },
-        { word: "framework", startSeconds: 6.85, endSeconds: 7.5, probability: 0.99 },
-        { word: "to", startSeconds: 7.55, endSeconds: 7.8, probability: 0.98 },
-        { word: "dominate", startSeconds: 7.85, endSeconds: 8.5, probability: 0.99 },
-        { word: "short", startSeconds: 8.55, endSeconds: 9.0, probability: 0.98 },
-        { word: "form.", startSeconds: 9.05, endSeconds: 9.5, probability: 0.99 },
-
-        { word: "Remember,", startSeconds: 9.7, endSeconds: 10.3, probability: 0.99 },
-        { word: "consistency", startSeconds: 10.35, endSeconds: 11.2, probability: 0.99 },
-        { word: "beats", startSeconds: 11.25, endSeconds: 11.8, probability: 0.98 },
-        { word: "talent", startSeconds: 11.85, endSeconds: 12.5, probability: 0.99 },
-        { word: "every", startSeconds: 12.55, endSeconds: 13.1, probability: 0.99 },
-        { word: "single", startSeconds: 13.15, endSeconds: 13.8, probability: 0.99 },
-        { word: "day.", startSeconds: 13.85, endSeconds: 14.4, probability: 0.99 },
-      ];
+      // Generate word-level ASS tokens distributed across each clip
+      const sampleWords: AssWordToken[] = [];
+      for (const cand of candidates) {
+        const segDur = cand.end - cand.start;
+        const words = `${cand.title} Why creators quit early? Here is the framework to dominate short-form video`.split(" ");
+        const step = segDur / (words.length + 1);
+        words.forEach((w, idx) => {
+          sampleWords.push({
+            word: w,
+            startSeconds: cand.start + idx * step,
+            endSeconds: cand.start + (idx + 1) * step,
+            probability: 0.99,
+          });
+        });
+      }
 
       await automaticClipGenerator.generateClips({
         jobId,
