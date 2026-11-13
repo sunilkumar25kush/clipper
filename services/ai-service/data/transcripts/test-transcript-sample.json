@@ -1,0 +1,340 @@
+{
+  "id": "test-transcript-sample",
+  "project_id": "proj-test-123",
+  "language": "en",
+  "language_confidence": 1.0,
+  "duration_seconds": 45.0,
+  "word_count": 50,
+  "model_used": "faster-whisper-test",
+  "speakers_detected": [
+    "speaker_0",
+    "speaker_1"
+  ],
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 6.5,
+      "text": "Why do ninety percent of creators fail in their very first year?",
+      "speaker_id": "speaker_0",
+      "confidence": 1.0,
+      "words": [
+        {
+          "word": "Why",
+          "start": 0.0,
+          "end": 0.4,
+          "probability": 1.0
+        },
+        {
+          "word": "do",
+          "start": 0.45,
+          "end": 0.6,
+          "probability": 1.0
+        },
+        {
+          "word": "ninety",
+          "start": 0.65,
+          "end": 1.1,
+          "probability": 1.0
+        },
+        {
+          "word": "percent",
+          "start": 1.15,
+          "end": 1.6,
+          "probability": 1.0
+        },
+        {
+          "word": "of",
+          "start": 1.65,
+          "end": 1.8,
+          "probability": 1.0
+        },
+        {
+          "word": "creators",
+          "start": 1.85,
+          "end": 2.4,
+          "probability": 1.0
+        },
+        {
+          "word": "fail",
+          "start": 2.45,
+          "end": 2.9,
+          "probability": 1.0
+        },
+        {
+          "word": "in",
+          "start": 2.95,
+          "end": 3.1,
+          "probability": 1.0
+        },
+        {
+          "word": "their",
+          "start": 3.15,
+          "end": 3.4,
+          "probability": 1.0
+        },
+        {
+          "word": "very",
+          "start": 3.45,
+          "end": 3.8,
+          "probability": 1.0
+        },
+        {
+          "word": "first",
+          "start": 3.85,
+          "end": 4.3,
+          "probability": 1.0
+        },
+        {
+          "word": "year?",
+          "start": 4.35,
+          "end": 5.2,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 6.5,
+      "end": 18.0,
+      "text": "The single biggest mistake is building content without understanding the first three-second hook.",
+      "speaker_id": "speaker_0",
+      "confidence": 1.0,
+      "words": [
+        {
+          "word": "The",
+          "start": 6.5,
+          "end": 6.7,
+          "probability": 1.0
+        },
+        {
+          "word": "single",
+          "start": 6.75,
+          "end": 7.1,
+          "probability": 1.0
+        },
+        {
+          "word": "biggest",
+          "start": 7.15,
+          "end": 7.6,
+          "probability": 1.0
+        },
+        {
+          "word": "mistake",
+          "start": 7.65,
+          "end": 8.1,
+          "probability": 1.0
+        },
+        {
+          "word": "is",
+          "start": 8.15,
+          "end": 8.3,
+          "probability": 1.0
+        },
+        {
+          "word": "building",
+          "start": 8.35,
+          "end": 8.8,
+          "probability": 1.0
+        },
+        {
+          "word": "content",
+          "start": 8.85,
+          "end": 9.4,
+          "probability": 1.0
+        },
+        {
+          "word": "without",
+          "start": 9.45,
+          "end": 9.9,
+          "probability": 1.0
+        },
+        {
+          "word": "understanding",
+          "start": 9.95,
+          "end": 10.7,
+          "probability": 1.0
+        },
+        {
+          "word": "the",
+          "start": 10.75,
+          "end": 10.9,
+          "probability": 1.0
+        },
+        {
+          "word": "first",
+          "start": 10.95,
+          "end": 11.3,
+          "probability": 1.0
+        },
+        {
+          "word": "three-second",
+          "start": 11.35,
+          "end": 12.1,
+          "probability": 1.0
+        },
+        {
+          "word": "hook.",
+          "start": 12.15,
+          "end": 12.8,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 18.0,
+      "end": 32.0,
+      "text": "Here is the 3-step framework: pattern interrupt, emotional resonance, and a clear takeaway.",
+      "speaker_id": "speaker_1",
+      "confidence": 1.0,
+      "words": [
+        {
+          "word": "Here",
+          "start": 18.0,
+          "end": 18.3,
+          "probability": 1.0
+        },
+        {
+          "word": "is",
+          "start": 18.35,
+          "end": 18.5,
+          "probability": 1.0
+        },
+        {
+          "word": "the",
+          "start": 18.55,
+          "end": 18.7,
+          "probability": 1.0
+        },
+        {
+          "word": "3-step",
+          "start": 18.75,
+          "end": 19.3,
+          "probability": 1.0
+        },
+        {
+          "word": "framework:",
+          "start": 19.35,
+          "end": 20.1,
+          "probability": 1.0
+        },
+        {
+          "word": "pattern",
+          "start": 20.15,
+          "end": 20.6,
+          "probability": 1.0
+        },
+        {
+          "word": "interrupt,",
+          "start": 20.65,
+          "end": 21.2,
+          "probability": 1.0
+        },
+        {
+          "word": "emotional",
+          "start": 21.25,
+          "end": 21.8,
+          "probability": 1.0
+        },
+        {
+          "word": "resonance,",
+          "start": 21.85,
+          "end": 22.5,
+          "probability": 1.0
+        },
+        {
+          "word": "and",
+          "start": 22.55,
+          "end": 22.7,
+          "probability": 1.0
+        },
+        {
+          "word": "a",
+          "start": 22.75,
+          "end": 22.8,
+          "probability": 1.0
+        },
+        {
+          "word": "clear",
+          "start": 22.85,
+          "end": 23.3,
+          "probability": 1.0
+        },
+        {
+          "word": "takeaway.",
+          "start": 23.35,
+          "end": 24.0,
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "start": 32.0,
+      "end": 45.0,
+      "text": "If you master this rule, your audience retention doubles overnight.",
+      "speaker_id": "speaker_1",
+      "confidence": 1.0,
+      "words": [
+        {
+          "word": "If",
+          "start": 32.0,
+          "end": 32.2,
+          "probability": 1.0
+        },
+        {
+          "word": "you",
+          "start": 32.25,
+          "end": 32.4,
+          "probability": 1.0
+        },
+        {
+          "word": "master",
+          "start": 32.45,
+          "end": 32.9,
+          "probability": 1.0
+        },
+        {
+          "word": "this",
+          "start": 32.95,
+          "end": 33.2,
+          "probability": 1.0
+        },
+        {
+          "word": "rule,",
+          "start": 33.25,
+          "end": 33.7,
+          "probability": 1.0
+        },
+        {
+          "word": "your",
+          "start": 33.75,
+          "end": 34.0,
+          "probability": 1.0
+        },
+        {
+          "word": "audience",
+          "start": 34.05,
+          "end": 34.6,
+          "probability": 1.0
+        },
+        {
+          "word": "retention",
+          "start": 34.65,
+          "end": 35.2,
+          "probability": 1.0
+        },
+        {
+          "word": "doubles",
+          "start": 35.25,
+          "end": 35.8,
+          "probability": 1.0
+        },
+        {
+          "word": "overnight.",
+          "start": 35.85,
+          "end": 36.6,
+          "probability": 1.0
+        }
+      ]
+    }
+  ],
+  "created_at": "2026-11-13T15:01:37.616986Z"
+}
