@@ -485,7 +485,76 @@ export class JobService {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
-      // If no local file on disk, create a high-quality 15s demo video with audio using FFmpeg
+      // If project has an authorized URL and no local asset yet, download the real video
+      if (!localSourcePath && project.sourceUrl) {
+        const urlStorageKey = `users/${userId}/projects/${projectId}/source_url_video.mp4`;
+        const urlLocalPath = path.join(uploadsDir, urlStorageKey);
+        const urlDir = path.dirname(urlLocalPath);
+        if (!fs.existsSync(urlDir)) {
+          fs.mkdirSync(urlDir, { recursive: true });
+        }
+
+        console.log(`[JobService] Ingesting video from authorized URL: ${project.sourceUrl}...`);
+        await this.updateJobStage(
+          jobId,
+          projectId,
+          ProcessingState.VALIDATING,
+          15,
+          "Downloading video from authorized URL...",
+        );
+
+        try {
+          // If it's a direct video link (.mp4/.webm/.mov)
+          if (/\.(mp4|webm|mov|mkv)(\?.*)?$/i.test(project.sourceUrl)) {
+            const resp = await fetch(project.sourceUrl);
+            if (resp.ok && resp.body) {
+              const fileStream = fs.createWriteStream(urlLocalPath);
+              // @ts-expect-error Node fetch stream pipeline
+              const { Readable } = await import("stream");
+              // @ts-expect-error Node fetch body stream
+              await import("stream/promises").then(({ pipeline }) => pipeline(Readable.fromWeb(resp.body), fileStream));
+            }
+          } else {
+            // Use yt-dlp to download from YouTube, Vimeo, Loom, TikTok, etc.
+            await executeProcess("python", [
+              "-m", "yt_dlp",
+              "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+              "--no-playlist",
+              "--max-filesize", "250M",
+              "-o", urlLocalPath,
+              project.sourceUrl,
+            ]);
+          }
+
+          if (fs.existsSync(urlLocalPath) && fs.statSync(urlLocalPath).size > 0) {
+            localSourcePath = urlLocalPath;
+            const meta = await metadataExtractor.extract(urlLocalPath).catch(() => null);
+
+            sourceAsset = await prisma.videoAsset.create({
+              data: {
+                projectId,
+                assetKind: "SOURCE_VIDEO",
+                storageBucket: "local",
+                storageKey: urlStorageKey,
+                mimeType: "video/mp4",
+                fileSizeBytes: fs.statSync(urlLocalPath).size,
+                durationSeconds: meta?.durationSeconds || 60,
+                width: meta?.width || 1280,
+                height: meta?.height || 720,
+                fps: meta?.fps || 30,
+                videoCodec: meta?.videoCodec || "h264",
+                audioCodec: meta?.audioCodec || "aac",
+                status: "READY",
+              },
+            });
+            console.log(`[JobService] Successfully downloaded and registered source asset for project ${projectId}`);
+          }
+        } catch (downloadErr) {
+          console.warn(`[JobService] Failed to download video from URL ${project.sourceUrl}:`, downloadErr);
+        }
+      }
+
+      // If still no local file on disk, create a high-quality 30s demo video with gentle audio
       if (!localSourcePath || !fs.existsSync(localSourcePath)) {
         const demoStorageKey = `users/${userId}/projects/${projectId}/demo_source_1080p.mp4`;
         const demoLocalPath = path.join(uploadsDir, demoStorageKey);
@@ -499,14 +568,15 @@ export class JobService {
           await executeProcess(workerConfig.ffmpegPath, [
             "-y",
             "-f", "lavfi",
-            "-i", "testsrc=duration=15:size=1280x720:rate=30",
+            "-i", "color=c=0x18181b:size=1280x720:duration=30:rate=30",
             "-f", "lavfi",
-            "-i", "sine=frequency=1000:duration=15",
+            "-i", "sine=frequency=440:duration=30",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
-            "-t", "15",
+            "-af", "volume=0.15",
+            "-t", "30",
             demoLocalPath,
           ]);
         }
@@ -522,7 +592,7 @@ export class JobService {
               storageKey: demoStorageKey,
               mimeType: "video/mp4",
               fileSizeBytes: fs.statSync(demoLocalPath).size,
-              durationSeconds: 15,
+              durationSeconds: 30,
               width: 1280,
               height: 720,
               fps: 30,

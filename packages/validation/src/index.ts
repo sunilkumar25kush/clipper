@@ -39,6 +39,7 @@ export const resendVerificationSchema = z.object({
 export const createProjectSchema = z.object({
   title: z.string().min(1).max(255),
   sourceType: z.enum(["FILE_UPLOAD", "AUTHORIZED_URL"]),
+  sourceUrl: z.string().url().optional().nullable(),
   rightsAttested: z.literal(true, {
     errorMap: () => ({ message: "You must attest rights to the video content" }),
   }),
