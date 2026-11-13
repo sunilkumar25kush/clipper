@@ -1,0 +1,496 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+}
+
+enum SubStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentProvider {
+  INTERNAL
+  RAZORPAY
+  STRIPE
+}
+
+enum PaymentStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum CreditTxType {
+  CYCLE_GRANT
+  HOLD
+  COMMIT
+  REFUND
+  ADMIN_ADJUST
+}
+
+enum VideoSourceType {
+  FILE_UPLOAD
+  AUTHORIZED_URL
+}
+
+enum ProjectStatus {
+  DRAFT
+  UPLOADED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum AssetKind {
+  SOURCE_VIDEO
+  EXTRACTED_AUDIO
+}
+
+enum AssetStatus {
+  UPLOADING
+  UPLOADED
+  READY
+  DELETED
+}
+
+enum JobType {
+  FULL_PROJECT_ANALYSIS
+  SINGLE_CLIP_RENDER
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  CANCELLING
+  CANCELLED
+  COMPLETED
+  FAILED
+}
+
+enum JobStage {
+  QUEUED
+  VALIDATING_SOURCE
+  EXTRACTING_AUDIO
+  TRANSCRIBING
+  ANALYZING_SEMANTICS
+  RENDERING_CLIPS
+  COMPLETED
+}
+
+enum ClipCategory {
+  HOOK
+  FUNNY
+  EDUCATIONAL
+  EMOTIONAL
+  STORYTELLING
+  MOTIVATIONAL
+  DISCUSSION
+  INSIGHT
+}
+
+enum AspectRatio {
+  RATIO_9_16
+  RATIO_16_9
+  RATIO_1_1
+}
+
+enum CropMode {
+  FACE_TRACK
+  CENTER_CROP
+  BLUR_PAD
+}
+
+enum ClipStatus {
+  DETECTED
+  RENDERING
+  READY
+  FAILED
+}
+
+enum CaptionPosition {
+  TOP_SAFE
+  MIDDLE
+  BOTTOM_SAFE
+}
+
+enum ExportResolution {
+  RES_720P
+  RES_1080P
+}
+
+enum ExportStatus {
+  RENDERING
+  READY
+  FAILED
+  EXPIRED
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+model User {
+  id              String         @id @default(uuid()) @db.Uuid
+  email           String         @unique @db.VarChar(255)
+  passwordHash    String?        @db.VarChar(255)
+  fullName        String         @db.VarChar(120)
+  avatarUrl       String?
+  role            UserRole       @default(USER)
+  emailVerifiedAt DateTime?      @db.Timestamptz
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now()) @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @db.Timestamptz
+
+  accounts        Account[]
+  sessions        Session[]
+  subscription    Subscription?
+  usageCredit     UsageCredit?
+  usageHistory    UsageHistory[]
+  payments        Payment[]
+  projects        VideoProject[]
+
+  @@index([email])
+}
+
+model Account {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  provider          String   @db.VarChar(50)
+  providerAccountId String   @db.VarChar(255)
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         Int?
+  createdAt         DateTime @default(now()) @db.Timestamptz
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  refreshTokenHash String    @unique @db.VarChar(255)
+  userAgent        String?
+  ipAddress        String?   @db.VarChar(45)
+  expiresAt        DateTime  @db.Timestamptz
+  revokedAt        DateTime? @db.Timestamptz
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model VerificationToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  identifier String    @db.VarChar(255)
+  tokenHash  String    @unique @db.VarChar(255)
+  type       TokenType
+  expiresAt  DateTime  @db.Timestamptz
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+
+  @@index([identifier, type])
+}
+
+model Subscription {
+  id                 String          @id @default(uuid()) @db.Uuid
+  userId             String          @unique @db.Uuid
+  planTier           PlanTier        @default(FREE)
+  status             SubStatus       @default(ACTIVE)
+  provider           PaymentProvider @default(INTERNAL)
+  providerSubId      String?         @unique @db.VarChar(255)
+  providerCustomerId String?         @db.VarChar(255)
+  currentPeriodStart DateTime        @db.Timestamptz
+  currentPeriodEnd   DateTime        @db.Timestamptz
+  cancelAtPeriodEnd  Boolean         @default(false)
+  createdAt          DateTime        @default(now()) @db.Timestamptz
+  updatedAt          DateTime        @updatedAt @db.Timestamptz
+
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments           Payment[]
+
+  @@index([status, currentPeriodEnd])
+}
+
+model UsageCredit {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  totalAllocated Int      @default(60)
+  usedCredits    Int      @default(0)
+  heldCredits    Int      @default(0)
+  bonusCredits   Int      @default(0)
+  resetAt        DateTime @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UsageHistory {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @db.Uuid
+  projectId       String?       @db.Uuid
+  jobId           String?       @db.Uuid
+  transactionType CreditTxType
+  amount          Int
+  balanceAfter    Int
+  description     String        @db.VarChar(255)
+  createdAt       DateTime      @default(now()) @db.Timestamptz
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         VideoProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  job             ProcessingJob?@relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([jobId])
+}
+
+model Payment {
+  id                 String          @id @default(uuid()) @db.Uuid
+  userId             String          @db.Uuid
+  subscriptionId     String?         @db.Uuid
+  provider           PaymentProvider
+  providerOrderId    String          @unique @db.VarChar(255)
+  providerPaymentId  String?         @unique @db.VarChar(255)
+  amountSubunits     Int
+  currency           String          @default("INR") @db.VarChar(3)
+  status             PaymentStatus
+  receiptUrl         String?
+  rawWebhookPayload  Json?
+  createdAt          DateTime        @default(now()) @db.Timestamptz
+  updatedAt          DateTime        @updatedAt @db.Timestamptz
+
+  user               User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subscription       Subscription?   @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model VideoProject {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @db.Uuid
+  title           String          @db.VarChar(255)
+  sourceType      VideoSourceType
+  sourceUrl       String?
+  rightsAttested  Boolean         @default(false)
+  status          ProjectStatus   @default(DRAFT)
+  language        String          @default("en") @db.VarChar(10)
+  targetAspect    AspectRatio     @default(RATIO_9_16)
+  minClipDuration Int             @default(15)
+  maxClipDuration Int             @default(60)
+  maxClipsToGen   Int             @default(10)
+  expiresAt       DateTime        @db.Timestamptz
+  deletedAt       DateTime?       @db.Timestamptz
+  createdAt       DateTime        @default(now()) @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @db.Timestamptz
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets          VideoAsset[]
+  jobs            ProcessingJob[]
+  transcript      Transcript?
+  speakers        Speaker[]
+  clips           Clip[]
+  usageHistory    UsageHistory[]
+
+  @@index([userId, deletedAt, createdAt(sort: Desc)])
+  @@index([status, expiresAt])
+}
+
+model VideoAsset {
+  id              String      @id @default(uuid()) @db.Uuid
+  projectId       String      @db.Uuid
+  assetKind       AssetKind
+  storageBucket   String      @db.VarChar(120)
+  storageKey      String      @unique
+  uploadId        String?     @db.VarChar(255)
+  mimeType        String      @db.VarChar(100)
+  fileSizeBytes   BigInt
+  durationSeconds Float?
+  width           Int?
+  height          Int?
+  fps             Float?
+  videoCodec      String?     @db.VarChar(50)
+  audioCodec      String?     @db.VarChar(50)
+  status          AssetStatus @default(UPLOADING)
+  createdAt       DateTime    @default(now()) @db.Timestamptz
+
+  project         VideoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, assetKind])
+}
+
+model ProcessingJob {
+  id              String         @id @default(uuid()) @db.Uuid
+  projectId       String         @db.Uuid
+  clipId          String?        @db.Uuid
+  jobType         JobType
+  bullMqJobId     String         @unique @db.VarChar(255)
+  status          JobStatus      @default(QUEUED)
+  stage           JobStage       @default(QUEUED)
+  progressPercent Int            @default(0)
+  attemptsMade    Int            @default(0)
+  creditsHeld     Int            @default(0)
+  errorCode       String?        @db.VarChar(100)
+  errorMessage    String?
+  startedAt       DateTime?      @db.Timestamptz
+  completedAt     DateTime?      @db.Timestamptz
+  createdAt       DateTime       @default(now()) @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @db.Timestamptz
+
+  project         VideoProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clip            Clip?          @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  usageHistory    UsageHistory[]
+
+  @@index([projectId, status])
+  @@index([status, createdAt])
+}
+
+model Transcript {
+  id               String              @id @default(uuid()) @db.Uuid
+  projectId        String              @unique @db.Uuid
+  languageDetected String              @db.VarChar(10)
+  durationSeconds  Float
+  fullText         String
+  wordCount        Int
+  whisperModel     String              @db.VarChar(50)
+  createdAt        DateTime            @default(now()) @db.Timestamptz
+
+  project          VideoProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segments         TranscriptSegment[]
+}
+
+model Speaker {
+  id               String              @id @default(uuid()) @db.Uuid
+  projectId        String              @db.Uuid
+  speakerLabel     String              @db.VarChar(50)
+  customName       String?             @db.VarChar(100)
+  totalSpeakingSec Float               @default(0)
+
+  project          VideoProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segments         TranscriptSegment[]
+
+  @@unique([projectId, speakerLabel])
+}
+
+model TranscriptSegment {
+  id            String     @id @default(uuid()) @db.Uuid
+  transcriptId  String     @db.Uuid
+  speakerId     String?    @db.Uuid
+  sequenceIndex Int
+  startTime     Float
+  endTime       Float
+  text          String
+  confidence    Float
+  wordsJson     Json
+
+  transcript    Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  speaker       Speaker?   @relation(fields: [speakerId], references: [id], onDelete: SetNull)
+
+  @@index([transcriptId, sequenceIndex])
+  @@index([transcriptId, startTime, endTime])
+}
+
+model Clip {
+  id                 String          @id @default(uuid()) @db.Uuid
+  projectId          String          @db.Uuid
+  rankOrder          Int
+  title              String          @db.VarChar(255)
+  description        String
+  category           ClipCategory
+  selectionReason    String
+  startTime          Float
+  endTime            Float
+  duration           Float
+  aspectRatio        AspectRatio     @default(RATIO_9_16)
+  cropMode           CropMode        @default(FACE_TRACK)
+  cropTrajectoryJson Json?
+  thumbnailKey       String?
+  status             ClipStatus      @default(DETECTED)
+  isDeleted          Boolean         @default(false)
+  createdAt          DateTime        @default(now()) @db.Timestamptz
+  updatedAt          DateTime        @updatedAt @db.Timestamptz
+
+  project            VideoProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  score              ClipScore?
+  caption            ClipCaption?
+  exports            Export[]
+  jobs               ProcessingJob[]
+
+  @@index([projectId, isDeleted, rankOrder])
+  @@index([projectId, category])
+}
+
+model ClipScore {
+  id                   String @id @default(uuid()) @db.Uuid
+  clipId               String @unique @db.Uuid
+  hookScore            Int
+  engagementScore      Int
+  contextScore         Int
+  overallScore         Int
+  confidence           Float  @default(0.85)
+  scoringBreakdownJson Json?
+
+  clip                 Clip   @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  @@index([overallScore(sort: Desc)])
+}
+
+model ClipCaption {
+  id                String          @id @default(uuid()) @db.Uuid
+  clipId            String          @unique @db.Uuid
+  presetId          String          @default("hormozi-bold") @db.VarChar(50)
+  fontFamily        String          @default("Montserrat") @db.VarChar(80)
+  fontSize          Int             @default(64)
+  primaryColorHex   String          @default("#FFFFFF") @db.VarChar(9)
+  highlightColorHex String          @default("#FACC15") @db.VarChar(9)
+  strokeColorHex    String          @default("#000000") @db.VarChar(9)
+  strokeWidth       Int             @default(4)
+  position          CaptionPosition @default(BOTTOM_SAFE)
+  wordsPerLine      Int             @default(3)
+  captionsJson      Json
+  updatedAt         DateTime        @updatedAt @db.Timestamptz
+
+  clip              Clip            @relation(fields: [clipId], references: [id], onDelete: Cascade)
+}
+
+model Export {
+  id            String           @id @default(uuid()) @db.Uuid
+  clipId        String           @db.Uuid
+  storageBucket String           @db.VarChar(120)
+  storageKey    String           @unique
+  resolution    ExportResolution
+  aspectRatio   AspectRatio
+  hasWatermark  Boolean
+  fileSizeBytes BigInt?
+  status        ExportStatus     @default(RENDERING)
+  createdAt     DateTime         @default(now()) @db.Timestamptz
+
+  clip          Clip             @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  @@index([clipId, status])
+}
+
