@@ -1,0 +1,23 @@
+{
+  "name": "clipforge-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --filter=!clipforge-ai build",
+    "dev:web": "pnpm --filter @clipforge/web dev",
+    "dev:api": "pnpm --filter @clipforge/api dev",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r --filter=!clipforge-ai typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "eslint": "^9.19.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.23.0"
+  },
+  "packageManager": "pnpm@12.15.0"
+}

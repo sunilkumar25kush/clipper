@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+.next
+coverage
+.turbo
+.agent
+.gemini
+.hermes
+.opencode
+.impeccable
+docs
