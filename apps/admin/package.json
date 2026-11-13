@@ -1,0 +1,12 @@
+{
+  "name": "@clipforge/admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClipForge AI Admin Operations Portal (Placeholder for Phase 1)",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
