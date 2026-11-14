@@ -121,6 +121,10 @@ dump.rdb
 services/ai-service/data/candidates/*.json
 !services/ai-service/data/candidates/.gitkeep
 
+# Local Human Review Store
+services/ai-service/data/human_reviews/*.json
+!services/ai-service/data/human_reviews/.gitkeep
+
 # ------------------------------------------------------------------------------
 # 7. LOGS & DIAGNOSTICS
 # ------------------------------------------------------------------------------

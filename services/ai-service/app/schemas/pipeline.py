@@ -51,3 +51,4 @@ class PipelineProcessResponse(BaseModel):
     message: str
     clips: List[PipelineClipOutput] = Field(default_factory=list)
     stages_completed: List[str] = Field(default_factory=list)
+

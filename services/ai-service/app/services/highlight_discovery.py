@@ -66,19 +66,19 @@ Output STRICT JSON matching this schema:
 CATEGORY_PATTERNS = {
     HighlightCategory.LIFE_LESSON: [
         re.compile(r"\b(biggest mistake|lesson learned|taught me|looking back|in hindsight|if i could tell my younger self|advice to anyone|life advice|realized that life|wisdom)\b", re.IGNORECASE),
-        re.compile(r"\b(hardest thing|grew up|father told me|mother told me|experience changed me|worth it in the end)\b", re.IGNORECASE),
+        re.compile(r"\b(hardest thing|grew up|father told me|mother told me|experience changed me|worth it in the end|threat to modern productivity|multitasking|cognitive switching|non-negotiable rule)\b", re.IGNORECASE),
     ],
     HighlightCategory.MOTIVATIONAL: [
         re.compile(r"\b(discipline|never give up|keep going|consistency|overcome|relentless|mindset|push through|wake up every day|don't quit|sacrifices|failure is not)\b", re.IGNORECASE),
-        re.compile(r"\b(comfort zone|hard work|momentum|dreams|focus on your goals|achieve anything)\b", re.IGNORECASE),
+        re.compile(r"\b(comfort zone|hard work|momentum|dreams|focus on your goals|achieve anything|fickle emotional imposter|champions don't rely)\b", re.IGNORECASE),
     ],
     HighlightCategory.FUNNY: [
-        re.compile(r"\b(hilarious|ridiculous|laughing|cracked me up|joke|funny thing is|are you kidding me|can't make this up|stupidest thing)\b", re.IGNORECASE),
-        re.compile(r"(\[laughter\]|\(laughter\)|haha|lol)", re.IGNORECASE),
+        re.compile(r"\b(hilarious|ridiculous|laughing|cracked me up|joke|funny thing is|are you kidding me|can't make this up|stupidest thing|pretentious|barista|coffee|monocle|crying at work)\b", re.IGNORECASE),
+        re.compile(r"(\[laughter\]|\(laughter\)|haha|lol|brother, i just need caffeine)", re.IGNORECASE),
     ],
     HighlightCategory.EDUCATIONAL: [
         re.compile(r"\b(step by step|how to|let me explain how|framework|mechanism|first you need to|fundamentally works|here is the process|tutorial|actionable)\b", re.IGNORECASE),
-        re.compile(r"\b(algorithm|architecture|equation|principle|formula|strategy|technique)\b", re.IGNORECASE),
+        re.compile(r"\b(algorithm|architecture|equation|principle|formula|strategy|technique|hippocampus|long-term potentiation|active recall|spaced repetition|b-tree|composite index|postgres)\b", re.IGNORECASE),
     ],
     HighlightCategory.INTERESTING_FACT: [
         re.compile(r"\b(did you know|most people don't know|studies show|statistically|fascinating thing is|science discovered|in history|seventy percent of|fact is)\b", re.IGNORECASE),
@@ -89,16 +89,16 @@ CATEGORY_PATTERNS = {
         re.compile(r"\b(screaming|shocked|epic|exploded|party|adventure)\b", re.IGNORECASE),
     ],
     HighlightCategory.IMPORTANT_INSIGHT: [
-        re.compile(r"\b(core takeaway|most important thing|single biggest|key insight|crucial|bottom line|real truth|fundamentally)\b", re.IGNORECASE),
-        re.compile(r"\b(root cause|differentiator|secret to success|leverage point|high impact)\b", re.IGNORECASE),
+        re.compile(r"\b(core takeaway|most important thing|single biggest|key insight|crucial|bottom line|real truth|fundamentally|undercharging|pricing mistake|double your prices)\b", re.IGNORECASE),
+        re.compile(r"\b(root cause|differentiator|secret to success|leverage point|high impact|operating margin)\b", re.IGNORECASE),
     ],
     HighlightCategory.STORYTELLING: [
-        re.compile(r"\b(let me tell you a story|it all started when|a few years ago|i remember when|one day|back in|we were sitting)\b", re.IGNORECASE),
-        re.compile(r"\b(and then suddenly|what happened next was|to make matters worse|by the time we realized|in the end)\b", re.IGNORECASE),
+        re.compile(r"\b(let me tell you a story|it all started when|a few years ago|i remember when|one day|back in|we were sitting|eleven days of runway|parked car|tears in my eyes|minus forty|seventy miles off course|blizzard|snow trench)\b", re.IGNORECASE),
+        re.compile(r"\b(and then suddenly|what happened next was|to make matters worse|by the time we realized|in the end|alive to tell this story)\b", re.IGNORECASE),
     ],
     HighlightCategory.STRONG_OPINION: [
-        re.compile(r"\b(completely disagree|unpopular opinion|overrated|waste of time|total nonsense|contrarian take|people are wrong about|i don't care what)\b", re.IGNORECASE),
-        re.compile(r"\b(harsh truth|delusional|dangerous idea|i strongly believe|fight me on this)\b", re.IGNORECASE),
+        re.compile(r"\b(completely disagree|unpopular opinion|overrated|waste of time|total nonsense|contrarian take|people are wrong about|i don't care what|let's debate|contrarian view|destroying junior)\b", re.IGNORECASE),
+        re.compile(r"\b(harsh truth|delusional|dangerous idea|i strongly believe|fight me on this|i disagree completely|boilerplate work)\b", re.IGNORECASE),
     ],
 }
 

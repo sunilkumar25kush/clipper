@@ -267,3 +267,4 @@ class TestPipelineOrchestrator:
         assert data["status"] == "completed"
         assert data["project_id"] == "http_proj_001"
         assert "stages_completed" in data
+
