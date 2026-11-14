@@ -155,6 +155,7 @@ export class StorageService {
     const candidates = [
       path.join(this.localUploadDir, safeKey),
       path.resolve(findWorkspaceRoot(), "uploads", safeKey),
+      path.resolve(findWorkspaceRoot(), "apps/api/uploads", safeKey),
       path.resolve(process.cwd(), "uploads", safeKey),
       path.resolve(process.cwd(), "../../uploads", safeKey),
       path.resolve(process.cwd(), "../../services/video-worker/uploads", safeKey),

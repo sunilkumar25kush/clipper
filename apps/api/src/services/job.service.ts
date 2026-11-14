@@ -30,6 +30,19 @@ import { eventsService } from "./events.service.js";
 
 const DEFAULT_ESTIMATED_CREDITS = 5; // Default minutes held for analysis
 
+function findWorkspaceRoot(startDir: string = process.cwd()): string {
+  let curr = startDir;
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(curr, "pnpm-workspace.yaml"))) {
+      return curr;
+    }
+    const parent = path.dirname(curr);
+    if (parent === curr) break;
+    curr = parent;
+  }
+  return startDir;
+}
+
 export class JobService {
   /**
    * Creates and enqueues a background video processing job with idempotency,
@@ -480,7 +493,11 @@ export class JobService {
         localSourcePath = storageService.getLocalFilePath(sourceAsset.storageKey);
       }
 
-      const uploadsDir = path.resolve(process.cwd(), process.env.STORAGE_LOCAL_DIR || "uploads");
+      const rootDir = findWorkspaceRoot();
+      const configDir = process.env.STORAGE_LOCAL_DIR || "uploads";
+      const uploadsDir = path.isAbsolute(configDir)
+        ? configDir
+        : path.resolve(rootDir, configDir.replace(/^\.\//, ""));
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
