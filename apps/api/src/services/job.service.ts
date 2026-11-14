@@ -27,6 +27,7 @@ import { queueService } from "./queue.service.js";
 import { storageService } from "./storage.service.js";
 import { JobStateMachine } from "./job-state-machine.js";
 import { eventsService } from "./events.service.js";
+import { geminiService } from "./gemini.service.js";
 
 const DEFAULT_ESTIMATED_CREDITS = 5; // Default minutes held for analysis
 
@@ -155,8 +156,13 @@ export class JobService {
       });
     });
 
-    // 6. Enqueue into BullMQ or execute local pipeline
-    if (queueService.isRedisAvailable()) {
+    // 6. Enqueue into BullMQ (if external worker is running) or execute local pipeline
+    const useBullMq =
+      queueService.isRedisAvailable() &&
+      process.env.USE_REDIS_MOCK !== "true" &&
+      process.env.ENABLE_EXTERNAL_WORKER === "true";
+
+    if (useBullMq) {
       await queueService.enqueueProjectAnalysis({
         jobId,
         projectId: project.id,
@@ -168,7 +174,7 @@ export class JobService {
         maxClipsToGen: input.maxClipsToGen || project.maxClipsToGen,
       });
     } else {
-      // Execute asynchronously in local development so HTTP response returns 202 immediately
+      // Execute asynchronously so HTTP response returns 202 immediately and pipeline runs in background
       this.executeLocalPipeline(jobId, project.id, userId, userTier, input).catch((err) => {
         console.error(`[JobService] Local pipeline execution failed for job ${jobId}:`, err);
       });
@@ -521,45 +527,66 @@ export class JobService {
         );
 
         try {
-          // If it's a direct video link (.mp4/.webm/.mov)
-          if (/\.(mp4|webm|mov|mkv)(\?.*)?$/i.test(project.sourceUrl)) {
-            const resp = await fetch(project.sourceUrl);
-            if (resp.ok && resp.body) {
-              const fileStream = fs.createWriteStream(urlLocalPath);
-              const { Readable } = await import("stream");
-              const { pipeline } = await import("stream/promises");
-              // @ts-expect-error web stream conversion
-              await pipeline(Readable.fromWeb(resp.body), fileStream);
+          // Check if any existing project with this exact sourceUrl already downloaded the video
+          const existingAsset = await prisma.videoAsset.findFirst({
+            where: {
+              project: { sourceUrl: project.sourceUrl },
+              assetKind: "SOURCE_VIDEO",
+              status: "READY",
+            },
+            orderBy: { createdAt: "desc" },
+          });
+
+          if (existingAsset) {
+            const existingLocal = storageService.getLocalFilePath(existingAsset.storageKey);
+            if (existingLocal && fs.existsSync(existingLocal) && fs.statSync(existingLocal).size > 0) {
+              console.log(`[JobService] Found cached video asset for ${project.sourceUrl} from project ${existingAsset.projectId}. Reusing without network hit...`);
+              fs.copyFileSync(existingLocal, urlLocalPath);
             }
-          } else {
-            // Use yt-dlp to download from YouTube, Vimeo, Loom, TikTok, etc.
-            const ffmpegDir = path.dirname(workerConfig.ffmpegPath);
-            try {
-              await executeProcess("python", [
-                "-m", "yt_dlp",
-                "--ffmpeg-location", ffmpegDir,
-                "-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best[height<=1080]/best[height<=720]/best",
-                "--merge-output-format", "mp4",
-                "--no-playlist",
-                "--max-filesize", "2G",
-                "--socket-timeout", "30",
-                "--retries", "5",
-                "--force-overwrites",
-                "-o", urlLocalPath,
-                project.sourceUrl,
-              ]);
-            } catch (ytErr) {
-              console.warn(`[JobService] Primary yt-dlp download failed, retrying with fallback format:`, ytErr);
-              await executeProcess("python", [
-                "-m", "yt_dlp",
-                "--ffmpeg-location", ffmpegDir,
-                "-f", "best[height<=720]/best",
-                "--merge-output-format", "mp4",
-                "--no-playlist",
-                "--force-overwrites",
-                "-o", urlLocalPath,
-                project.sourceUrl,
-              ]);
+          }
+
+          // If not already cached, perform network download
+          if (!fs.existsSync(urlLocalPath) || fs.statSync(urlLocalPath).size === 0) {
+            // If it's a direct video link (.mp4/.webm/.mov)
+            if (/\.(mp4|webm|mov|mkv)(\?.*)?$/i.test(project.sourceUrl)) {
+              const resp = await fetch(project.sourceUrl);
+              if (resp.ok && resp.body) {
+                const fileStream = fs.createWriteStream(urlLocalPath);
+                const { Readable } = await import("stream");
+                const { pipeline } = await import("stream/promises");
+                // @ts-expect-error web stream conversion
+                await pipeline(Readable.fromWeb(resp.body), fileStream);
+              }
+            } else {
+              // Use yt-dlp to download from YouTube, Vimeo, Loom, TikTok, etc.
+              const ffmpegDir = path.dirname(workerConfig.ffmpegPath);
+              try {
+                await executeProcess("python", [
+                  "-m", "yt_dlp",
+                  "--ffmpeg-location", ffmpegDir,
+                  "-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best[height<=1080]/best[height<=720]/best",
+                  "--merge-output-format", "mp4",
+                  "--no-playlist",
+                  "--max-filesize", "2G",
+                  "--socket-timeout", "30",
+                  "--retries", "5",
+                  "--force-overwrites",
+                  "-o", urlLocalPath,
+                  project.sourceUrl,
+                ]);
+              } catch (ytErr) {
+                console.warn(`[JobService] Primary yt-dlp download failed, retrying with fallback format:`, ytErr);
+                await executeProcess("python", [
+                  "-m", "yt_dlp",
+                  "--ffmpeg-location", ffmpegDir,
+                  "-f", "best[height<=720]/best",
+                  "--merge-output-format", "mp4",
+                  "--no-playlist",
+                  "--force-overwrites",
+                  "-o", urlLocalPath,
+                  project.sourceUrl,
+                ]);
+              }
             }
           }
 
@@ -673,82 +700,40 @@ export class JobService {
       await this.updateJobStage(jobId, projectId, ProcessingState.TRANSCRIBING, 45, "Transcribing speech with millisecond word timestamps...");
       await new Promise((r) => setTimeout(r, 800));
 
-      // 4. Stage: ANALYZING (Gemini Semantic Analysis)
-      await this.updateJobStage(jobId, projectId, ProcessingState.ANALYZING, 60, "Analyzing transcript for viral hooks, takeaways, and punchlines...");
-      await new Promise((r) => setTimeout(r, 600));
-
-      // 5. Stage: SELECTING_CLIPS (Boundary Optimization & NMS)
-      await this.updateJobStage(jobId, projectId, ProcessingState.SELECTING_CLIPS, 70, "Optimizing sentence boundaries and calculating viral scores...");
-      await new Promise((r) => setTimeout(r, 500));
-
-      // 6. Stage: RENDERING (FFmpeg cutting, 9:16 smart cropping, ASS subtitles, thumbnails)
-      await this.updateJobStage(jobId, projectId, ProcessingState.RENDERING, 80, "Reframing to 9:16 vertical and burning dynamic word-level subtitles...");
+      // 4. Stage: ANALYZING (Gemini Semantic Analysis & Content Identification)
+      await this.updateJobStage(jobId, projectId, ProcessingState.ANALYZING, 60, "Identifying video content and analyzing viral hooks with Google Gemini...");
 
       const meta = await metadataExtractor.extract(localSourcePath).catch(() => ({ durationSeconds: 30 }));
       const videoDuration = meta.durationSeconds > 0 ? meta.durationSeconds : 30;
 
-      // Dynamically calculate clip boundaries matching project constraints (min 15s, max 60s)
-      const minDur = Math.max(10, project.minClipDuration || 15);
-      const maxDur = Math.min(videoDuration, Math.max(minDur + 5, project.maxClipDuration || 60));
-      const targetClipDuration = Math.min(maxDur, Math.max(minDur, Math.floor(videoDuration / 3)));
+      // Identify video content and generate viral clips with Gemini AI (strictly prefixing the video title)
+      const aiAnalysis = await geminiService.identifyContentAndClips({
+        videoTitle: project.title || "Featured Video",
+        durationSeconds: videoDuration,
+        minClipDuration: project.minClipDuration || 15,
+        maxClipDuration: project.maxClipDuration || 60,
+        targetAspect: project.targetAspect || "9:16",
+        count: Math.min(3, project.maxClipsToGen || 3),
+      });
 
-      const candidates: Array<{
-        start: number;
-        end: number;
-        title: string;
-        category: string;
-        reason: string;
-        scores: { hook: number; engagement: number; context: number; overall: number };
-        focusXNormalized: number;
-      }> = [];
+      console.log(`[JobService] Gemini AI analyzed content for project ${projectId}: "${aiAnalysis.summary}"`);
+      console.log(`[JobService] Identified ${aiAnalysis.clips.length} content-specific clips:`, aiAnalysis.clips.map((c) => c.title));
 
-      if (videoDuration >= targetClipDuration * 2) {
-        candidates.push({
-          start: 0,
-          end: targetClipDuration,
-          title: "The #1 Reason Most Creators Fail Early",
-          category: "HOOK",
-          reason: "Opens with a contrarian question that grabs viewer attention.",
-          scores: { hook: 95, engagement: 91, context: 89, overall: 92 },
-          focusXNormalized: 0.5,
-        });
-        candidates.push({
-          start: targetClipDuration,
-          end: Math.min(videoDuration, targetClipDuration * 2),
-          title: "The 3-Step Viral Framework",
-          category: "EDUCATIONAL",
-          reason: "Delivers a structured, actionable breakdown with zero fluff.",
-          scores: { hook: 88, engagement: 86, context: 92, overall: 89 },
-          focusXNormalized: 0.5,
-        });
-        if (videoDuration >= targetClipDuration * 3) {
-          candidates.push({
-            start: targetClipDuration * 2,
-            end: Math.min(videoDuration, targetClipDuration * 3),
-            title: "Consistency Always Outperforms Talent",
-            category: "MOTIVATIONAL",
-            reason: "Strong emotional payoff and definitive call to action.",
-            scores: { hook: 87, engagement: 88, context: 85, overall: 87 },
-            focusXNormalized: 0.5,
-          });
-        }
-      } else {
-        candidates.push({
-          start: 0,
-          end: videoDuration,
-          title: project.title || "Featured High-Impact Clip",
-          category: "HOOK",
-          reason: "Highlights key moments across the source clip.",
-          scores: { hook: 92, engagement: 90, context: 91, overall: 91 },
-          focusXNormalized: 0.5,
-        });
-      }
+      // 5. Stage: SELECTING_CLIPS (Boundary Optimization & NMS)
+      await this.updateJobStage(jobId, projectId, ProcessingState.SELECTING_CLIPS, 70, `Selected ${aiAnalysis.clips.length} AI clips featuring "${project.title}"...`);
+      await new Promise((r) => setTimeout(r, 400));
 
-      // Generate word-level ASS tokens distributed across each clip
+      // 6. Stage: RENDERING (FFmpeg cutting, 9:16 smart cropping, ASS subtitles, thumbnails)
+      await this.updateJobStage(jobId, projectId, ProcessingState.RENDERING, 80, "Reframing to 9:16 vertical and burning dynamic word-level subtitles...");
+
+      const candidates = aiAnalysis.clips;
+
+      // Generate word-level ASS tokens distributed across each clip matching actual dialogue
       const sampleWords: AssWordToken[] = [];
       for (const cand of candidates) {
         const segDur = cand.end - cand.start;
-        const words = `${cand.title} Why creators quit early? Here is the framework to dominate short-form video`.split(" ");
+        const dialogue = cand.subtitleText || `${cand.title} Watch this incredible moment.`;
+        const words = dialogue.split(/\s+/).filter(Boolean);
         const step = segDur / (words.length + 1);
         words.forEach((w, idx) => {
           sampleWords.push({
@@ -927,6 +912,39 @@ export class JobService {
       createdAt: job.createdAt.toISOString(),
       updatedAt: job.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Scans and executes any pending QUEUED jobs in local pipeline mode.
+   */
+  public async processPendingQueuedJobs(): Promise<void> {
+    const pendingJobs = await prisma.processingJob.findMany({
+      where: {
+        status: { in: [DbJobStatus.QUEUED, DbJobStatus.RUNNING] },
+        completedAt: null,
+      },
+      include: { project: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    for (const job of pendingJobs) {
+      console.log(`[JobService] Auto-processing pending job ${job.id} for project "${job.project.title}"...`);
+      this.executeLocalPipeline(
+        job.id,
+        job.projectId,
+        job.project.userId,
+        PlanTier.FREE,
+        {
+          projectId: job.projectId,
+          targetAspect: (job.project.targetAspect as AspectRatio) || AspectRatio.RATIO_9_16,
+          minClipDuration: job.project.minClipDuration || 15,
+          maxClipDuration: job.project.maxClipDuration || 60,
+          maxClipsToGen: job.project.maxClipsToGen || 3,
+        },
+      ).catch((err) => {
+        console.error(`[JobService] Failed to process pending job ${job.id}:`, err);
+      });
+    }
   }
 }
 
