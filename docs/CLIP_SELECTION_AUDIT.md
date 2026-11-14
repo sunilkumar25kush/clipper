@@ -343,3 +343,4 @@ The models already exist; the pipeline simply needs to write to them instead of 
 | **P1** | **Sentence Boundary Snapping** | Implement word-boundary snapping so clips start cleanly at sentence beginnings and end after terminal punctuation (`.`, `!`, `?`). |
 | **P1** | **Temporal Non-Maximum Suppression (NMS)** | Eliminate overlapping candidate proposals (IoU < 0.15) before sending them to the video rendering queue. |
 | **P2** | **Accurate Word-Level Captions** | Pass the actual Whisper word tokens for each clip to `automaticClipGenerator` so subtitles match spoken speech with millisecond accuracy. |
+
