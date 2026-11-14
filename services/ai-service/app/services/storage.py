@@ -86,3 +86,39 @@ class TranscriptStorage:
 
 transcript_storage = TranscriptStorage()
 
+class CandidateStorage:
+    """
+    Dedicated storage layer for discovered highlight candidates.
+    Stored independently from rendered clips and raw video assets.
+    """
+    def __init__(self, storage_dir: str = settings.candidate_storage_dir):
+        self.storage_dir = os.path.abspath(storage_dir)
+        os.makedirs(self.storage_dir, exist_ok=True)
+
+    def _get_file_path(self, project_id: str) -> str:
+        return os.path.join(self.storage_dir, f"{project_id}.json")
+
+    def save_candidates(self, project_id: str, candidates: list) -> str:
+        """Saves discovered highlight candidates to disk as JSON."""
+        file_path = self._get_file_path(project_id)
+        data = [c.model_dump(mode="json") if hasattr(c, "model_dump") else c for c in candidates]
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump({"project_id": project_id, "total": len(candidates), "candidates": data}, f, indent=2)
+        logger.info(f"Saved {len(candidates)} highlight candidates for project {project_id}")
+        return file_path
+
+    def get_candidates(self, project_id: str) -> list:
+        """Retrieves saved highlight candidates for a project."""
+        file_path = self._get_file_path(project_id)
+        if not os.path.exists(file_path):
+            return []
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("candidates", [])
+        except Exception as e:
+            logger.error(f"Error reading candidates from {file_path}: {e}")
+            return []
+
+candidate_storage = CandidateStorage()
+

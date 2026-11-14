@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     
     # Storage
     transcript_storage_dir: str = os.path.join(os.path.dirname(__file__), "..", "data", "transcripts")
+    candidate_storage_dir: str = os.path.join(os.path.dirname(__file__), "..", "data", "candidates")
     
     # Gemini AI Configuration
     gemini_api_key: Optional[str] = os.environ.get("GEMINI_API_KEY")

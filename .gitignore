@@ -117,6 +117,10 @@ tmp/
 # Redis Dumps
 dump.rdb
 
+# Local Candidate Store
+services/ai-service/data/candidates/*.json
+!services/ai-service/data/candidates/.gitkeep
+
 # ------------------------------------------------------------------------------
 # 7. LOGS & DIAGNOSTICS
 # ------------------------------------------------------------------------------

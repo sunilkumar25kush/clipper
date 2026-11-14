@@ -20,6 +20,13 @@ from app.schemas.intelligence import (
     TranscriptIntelligenceRequest,
     TranscriptIntelligenceResponse,
 )
+from app.schemas.highlight import (
+    HighlightCategory,
+    TranscriptEvidence,
+    HighlightCandidate,
+    HighlightDiscoveryRequest,
+    HighlightDiscoveryResponse,
+)
 
 __all__ = [
     "WordTimestamp",
@@ -37,5 +44,10 @@ __all__ = [
     "SemanticChunk",
     "TranscriptIntelligenceRequest",
     "TranscriptIntelligenceResponse",
+    "HighlightCategory",
+    "TranscriptEvidence",
+    "HighlightCandidate",
+    "HighlightDiscoveryRequest",
+    "HighlightDiscoveryResponse",
 ]
 
