@@ -509,10 +509,10 @@ export class JobService {
             const resp = await fetch(project.sourceUrl);
             if (resp.ok && resp.body) {
               const fileStream = fs.createWriteStream(urlLocalPath);
-              // @ts-expect-error Node fetch stream pipeline
               const { Readable } = await import("stream");
-              // @ts-expect-error Node fetch body stream
-              await import("stream/promises").then(({ pipeline }) => pipeline(Readable.fromWeb(resp.body), fileStream));
+              const { pipeline } = await import("stream/promises");
+              // @ts-expect-error web stream conversion
+              await pipeline(Readable.fromWeb(resp.body), fileStream);
             }
           } else {
             // Use yt-dlp to download from YouTube, Vimeo, Loom, TikTok, etc.

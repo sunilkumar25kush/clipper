@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "pnpm --parallel --filter @clipforge/api --filter @clipforge/web dev",
     "build": "pnpm -r --filter=!clipforge-ai build",
     "dev:web": "pnpm --filter @clipforge/web dev",
     "dev:api": "pnpm --filter @clipforge/api dev",
