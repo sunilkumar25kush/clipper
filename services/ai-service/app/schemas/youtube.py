@@ -91,3 +91,4 @@ class YouTubeEnrichmentResponse(BaseModel):
     retention_available: bool
     engagement_label: str
     enriched_candidates: List[RetentionEnrichedCandidate] = Field(default_factory=list)
+

@@ -1,9 +1,14 @@
 import re
 import logging
-from typing import List, Optional
-from app.schemas.transcript import TranscriptSegment, WordTimestamp
+from typing import List, Optional, Tuple
+from app.schemas.transcript import TranscriptSegment, WordTimestamp, TranscriptResponse
 
 logger = logging.getLogger("clipforge.transcript_cleaner")
+
+class CleanerStats:
+    def __init__(self, artifacts_removed: int = 0, repetitions_collapsed: int = 0):
+        self.artifacts_removed = artifacts_removed
+        self.repetitions_collapsed = repetitions_collapsed
 
 # Regex patterns for non-speech noise and transcription artifacts
 NOISE_PATTERNS = [
@@ -147,5 +152,32 @@ class TranscriptCleaner:
             last_end_time = cleaned_seg.end
 
         return cleaned_segments
+
+    @classmethod
+    def clean_transcript(cls, transcript: TranscriptResponse) -> Tuple[TranscriptResponse, CleanerStats]:
+        """
+        Cleans entire TranscriptResponse, standardizing segments, words, and word counts.
+        """
+        raw_seg_count = len(transcript.segments)
+        cleaned_segs = cls.clean_segments(transcript.segments)
+
+        total_words = 0
+        for s in cleaned_segs:
+            if s.words:
+                total_words += len(s.words)
+            else:
+                total_words += len(s.text.split())
+
+        cleaned_tr = transcript.model_copy(
+            update={
+                "segments": cleaned_segs,
+                "word_count": total_words,
+            }
+        )
+        stats = CleanerStats(
+            artifacts_removed=max(0, raw_seg_count - len(cleaned_segs)),
+            repetitions_collapsed=0,
+        )
+        return cleaned_tr, stats
 
 transcript_cleaner = TranscriptCleaner()

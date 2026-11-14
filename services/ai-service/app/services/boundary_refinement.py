@@ -345,4 +345,6 @@ class IntelligentBoundaryRefiner:
             refined_candidates=refined_list,
         )
 
+    refine_boundaries = refine_all_candidates
+
 intelligent_boundary_refiner = IntelligentBoundaryRefiner()

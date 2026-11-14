@@ -238,10 +238,26 @@ class YouTubeSignalService:
         enriched: List[RetentionEnrichedCandidate] = []
 
         for cand in candidates:
-            # Extract start and end timestamps
-            c_id = getattr(cand, "candidate_id", None) or cand.get("candidate_id", "cand_001")
-            start = float(getattr(cand, "start_time", None) or getattr(cand, "refined_start", None) or cand.get("start_time", cand.get("start", 0.0)))
-            end = float(getattr(cand, "end_time", None) or getattr(cand, "refined_end", None) or cand.get("end_time", cand.get("end", start + 15.0)))
+            # Extract start and end timestamps safely whether dict or Pydantic model
+            if isinstance(cand, dict):
+                c_id = str(cand.get("candidate_id", "cand_001"))
+                start = float(cand.get("start_time", cand.get("refined_start", cand.get("start", 0.0))))
+                end = float(cand.get("end_time", cand.get("refined_end", cand.get("end", start + 15.0))))
+            else:
+                c_id = str(getattr(cand, "candidate_id", "cand_001"))
+                start_val = getattr(cand, "refined_start", None)
+                if start_val is None:
+                    start_val = getattr(cand, "start_time", None)
+                if start_val is None:
+                    start_val = getattr(cand, "start", 0.0)
+                start = float(start_val)
+
+                end_val = getattr(cand, "refined_end", None)
+                if end_val is None:
+                    end_val = getattr(cand, "end_time", None)
+                if end_val is None:
+                    end_val = getattr(cand, "end", start + 15.0)
+                end = float(end_val)
 
             # Fallback condition: retention report missing or unauthorized
             if retention_report is None or not retention_report.is_authorized or retention_report.data_source != "youtube_analytics_api":
@@ -328,3 +344,4 @@ class YouTubeSignalService:
         )
 
 youtube_signal_service = YouTubeSignalService()
+

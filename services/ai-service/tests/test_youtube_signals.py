@@ -281,3 +281,4 @@ def test_api_youtube_enrich_candidates_endpoint():
     assert "AI-Estimated" in data["engagement_label"]
     assert len(data["enriched_candidates"]) == 1
     assert data["enriched_candidates"][0]["engagement_source"] == "ai_estimated_potential"
+

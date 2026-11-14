@@ -21,6 +21,7 @@ import {
   SubtitlePreset,
   CaptionPosition,
   metadataExtractor,
+  audioExtractor,
 } from "@clipforge/video-worker";
 import { AppError } from "../middlewares/error.js";
 import { queueService } from "./queue.service.js";
@@ -692,57 +693,161 @@ export class JobService {
         }
       }
 
-      // 2. Stage: EXTRACTING (Audio Extraction)
-      await this.updateJobStage(jobId, projectId, ProcessingState.EXTRACTING, 25, "Extracting speech-band 16kHz audio tracks...");
-      await new Promise((r) => setTimeout(r, 600));
+      // 2. Stage: EXTRACTING (Audio Extraction via FFmpeg 16kHz Mono)
+      await this.updateJobStage(jobId, projectId, ProcessingState.EXTRACTING, 25, "Extracting speech-band 16kHz audio track via FFmpeg...");
+      const audioWavPath = localSourcePath.replace(/\.[^/.]+$/, "") + "_16k_mono.wav";
+      try {
+        await audioExtractor.extractSpeechAudio(localSourcePath, audioWavPath);
+        console.log(`[JobService] Successfully extracted 16kHz speech audio to ${audioWavPath}`);
+      } catch (audioErr) {
+        console.warn(`[JobService] Audio extraction warning (proceeding if video contains valid audio):`, audioErr);
+      }
 
-      // 3. Stage: TRANSCRIBING (Speech Recognition)
-      await this.updateJobStage(jobId, projectId, ProcessingState.TRANSCRIBING, 45, "Transcribing speech with millisecond word timestamps...");
-      await new Promise((r) => setTimeout(r, 800));
-
-      // 4. Stage: ANALYZING (Gemini Semantic Analysis & Content Identification)
-      await this.updateJobStage(jobId, projectId, ProcessingState.ANALYZING, 60, "Identifying video content and analyzing viral hooks with Google Gemini...");
+      // 3. Stage: TRANSCRIBING (Faster-Whisper Transcription with Millisecond Word Timestamps)
+      await this.updateJobStage(jobId, projectId, ProcessingState.TRANSCRIBING, 40, "Transcribing speech with millisecond word timestamps...");
 
       const meta = await metadataExtractor.extract(localSourcePath).catch(() => ({ durationSeconds: 30 }));
       const videoDuration = meta.durationSeconds > 0 ? meta.durationSeconds : 30;
 
-      // Identify video content and generate viral clips with Gemini AI (strictly prefixing the video title)
-      const aiAnalysis = await geminiService.identifyContentAndClips({
-        videoTitle: project.title || "Featured Video",
-        durationSeconds: videoDuration,
-        minClipDuration: project.minClipDuration || 15,
-        maxClipDuration: project.maxClipDuration || 60,
-        targetAspect: project.targetAspect || "9:16",
-        count: Math.min(3, project.maxClipsToGen || 3),
+      // 4. Stage: ANALYZING (Content Intelligence: Cleaning, Semantic Chunks, Highlights & Quality Gating)
+      await this.updateJobStage(jobId, projectId, ProcessingState.ANALYZING, 55, "Discovering semantic highlights across 9 value categories with AI...");
+
+      const aiServiceUrl = process.env.AI_SERVICE_INTERNAL_URL || process.env.AI_SERVICE_URL || "http://localhost:8000";
+      let pipelineClips: Array<{
+        title: string;
+        start: number;
+        end: number;
+        duration: number;
+        category?: string;
+        reason?: string;
+        scores?: Record<string, number>;
+        subtitle_text?: string;
+        words?: Array<{ word: string; start: number; end: number; probability?: number }>;
+      }> = [];
+
+      try {
+        console.log(`[JobService] Calling Content Intelligence Pipeline at ${aiServiceUrl}/api/v1/pipeline/process...`);
+        const pipelinePayload = {
+          project_id: projectId,
+          audio_path: fs.existsSync(audioWavPath) ? audioWavPath : undefined,
+          video_duration: videoDuration,
+          video_title: project.title || "Featured Video",
+          min_clip_duration: project.minClipDuration || 15,
+          max_clip_duration: project.maxClipDuration || 60,
+          max_clips: Math.min(5, project.maxClipsToGen || 5),
+        };
+
+        const aiResponse = await fetch(`${aiServiceUrl}/api/v1/pipeline/process`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pipelinePayload),
+          signal: AbortSignal.timeout(60000),
+        });
+
+        if (aiResponse.ok) {
+          const result = (await aiResponse.json()) as {
+            status: string;
+            clips_generated: number;
+            message: string;
+            clips: typeof pipelineClips;
+          };
+          console.log(`[JobService] AI Content Intelligence Pipeline returned ${result.clips_generated} clips:`, result.message);
+          pipelineClips = result.clips || [];
+        } else {
+          const errText = await aiResponse.text();
+          console.warn(`[JobService] AI Service returned status ${aiResponse.status}: ${errText}. Falling back to content identification.`);
+        }
+      } catch (connErr) {
+        console.warn(`[JobService] AI Content Intelligence Service call failed (${connErr}). Falling back to content identification.`);
+      }
+
+      // If AI service was unreachable and returned no clips, fallback to geminiService
+      if (pipelineClips.length === 0) {
+        console.log(`[JobService] Using Gemini content analysis fallback for project ${projectId}...`);
+        const aiAnalysis = await geminiService.identifyContentAndClips({
+          videoTitle: project.title || "Featured Video",
+          durationSeconds: videoDuration,
+          minClipDuration: project.minClipDuration || 15,
+          maxClipDuration: project.maxClipDuration || 60,
+          targetAspect: project.targetAspect || "9:16",
+          count: Math.min(3, project.maxClipsToGen || 3),
+        });
+        pipelineClips = aiAnalysis.clips.map((c) => ({
+          title: c.title,
+          start: c.start,
+          end: c.end,
+          duration: c.end - c.start,
+          category: c.category,
+          reason: c.reason,
+          scores: c.scores,
+          subtitle_text: c.subtitleText,
+        }));
+      }
+
+      // 5. Stage: SELECTING_CLIPS (Boundary Refinement & Quality Selection)
+      await this.updateJobStage(
+        jobId,
+        projectId,
+        ProcessingState.SELECTING_CLIPS,
+        70,
+        `Selected ${pipelineClips.length} qualified highlights for "${project.title || "Video"}"...`,
+      );
+
+      // 6. Stage: RENDERING (FFmpeg vertical 9:16 cropping, ASS subtitles, thumbnails)
+      await this.updateJobStage(
+        jobId,
+        projectId,
+        ProcessingState.RENDERING,
+        78,
+        "Reframing to 9:16 vertical and burning dynamic word-level subtitles...",
+      );
+
+      const candidates = pipelineClips.map((c) => {
+        const sc = c.scores || {};
+        return {
+          title: c.title,
+          start: c.start,
+          end: c.end,
+          duration: c.duration,
+          category: c.category || "educational",
+          reason: c.reason || "High-value highlight moment",
+          scores: {
+            hook: sc.hook_strength ?? sc.hook ?? 85,
+            engagement: sc.engagement ?? 85,
+            context: sc.context ?? 85,
+            overall: sc.overall ?? 85,
+          },
+          subtitleText: c.subtitle_text || `${c.title} Watch this moment.`,
+        };
       });
 
-      console.log(`[JobService] Gemini AI analyzed content for project ${projectId}: "${aiAnalysis.summary}"`);
-      console.log(`[JobService] Identified ${aiAnalysis.clips.length} content-specific clips:`, aiAnalysis.clips.map((c) => c.title));
-
-      // 5. Stage: SELECTING_CLIPS (Boundary Optimization & NMS)
-      await this.updateJobStage(jobId, projectId, ProcessingState.SELECTING_CLIPS, 70, `Selected ${aiAnalysis.clips.length} AI clips featuring "${project.title}"...`);
-      await new Promise((r) => setTimeout(r, 400));
-
-      // 6. Stage: RENDERING (FFmpeg cutting, 9:16 smart cropping, ASS subtitles, thumbnails)
-      await this.updateJobStage(jobId, projectId, ProcessingState.RENDERING, 80, "Reframing to 9:16 vertical and burning dynamic word-level subtitles...");
-
-      const candidates = aiAnalysis.clips;
-
-      // Generate word-level ASS tokens distributed across each clip matching actual dialogue
+      // Collect real word timestamps if available from Whisper
       const sampleWords: AssWordToken[] = [];
-      for (const cand of candidates) {
-        const segDur = cand.end - cand.start;
-        const dialogue = cand.subtitleText || `${cand.title} Watch this incredible moment.`;
-        const words = dialogue.split(/\s+/).filter(Boolean);
-        const step = segDur / (words.length + 1);
-        words.forEach((w, idx) => {
-          sampleWords.push({
-            word: w,
-            startSeconds: cand.start + idx * step,
-            endSeconds: cand.start + (idx + 1) * step,
-            probability: 0.99,
+      for (const cand of pipelineClips) {
+        if (cand.words && cand.words.length > 0) {
+          for (const w of cand.words) {
+            sampleWords.push({
+              word: w.word,
+              startSeconds: w.start,
+              endSeconds: w.end,
+              probability: w.probability ?? 0.99,
+            });
+          }
+        } else {
+          // Approximate word timing across the segment if words array was empty
+          const segDur = cand.end - cand.start;
+          const dialogue = cand.subtitle_text || `${cand.title} Watch this incredible moment.`;
+          const words = dialogue.split(/\s+/).filter(Boolean);
+          const step = segDur / (words.length + 1);
+          words.forEach((w, idx) => {
+            sampleWords.push({
+              word: w,
+              startSeconds: cand.start + idx * step,
+              endSeconds: cand.start + (idx + 1) * step,
+              probability: 0.99,
+            });
           });
-        });
+        }
       }
 
       await automaticClipGenerator.generateClips({
@@ -756,13 +861,13 @@ export class JobService {
         subtitlePreset: SubtitlePreset.VIRAL_HIGHLIGHT,
         captionPosition: CaptionPosition.BOTTOM,
         onClipRendered: async (done, total) => {
-          const percent = 80 + Math.round((done / total) * 15);
+          const percent = 78 + Math.round((done / total) * 18);
           await this.updateJobStage(
             jobId,
             projectId,
             ProcessingState.RENDERING,
             percent,
-            `Rendered ${done} of ${total} short clips with captions...`,
+            `Rendered ${done} of ${total} vertical 9:16 clips with captions...`,
           );
         },
       });
