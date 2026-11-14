@@ -31,3 +31,4 @@ async def refine_boundaries(request: BoundaryRefinementRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Boundary refinement failed: {str(e)}",
         )
+

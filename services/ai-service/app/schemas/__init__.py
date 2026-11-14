@@ -39,6 +39,15 @@ from app.schemas.refinement import (
     BoundaryRefinementRequest,
     BoundaryRefinementResponse,
 )
+from app.schemas.youtube import (
+    YouTubePublicMetadata,
+    RetentionDataPoint,
+    RetentionInterval,
+    YouTubeRetentionReport,
+    RetentionEnrichedCandidate,
+    YouTubeEnrichmentRequest,
+    YouTubeEnrichmentResponse,
+)
 
 __all__ = [
     "WordTimestamp",
@@ -69,5 +78,12 @@ __all__ = [
     "RefinedBoundaryCandidate",
     "BoundaryRefinementRequest",
     "BoundaryRefinementResponse",
+    "YouTubePublicMetadata",
+    "RetentionDataPoint",
+    "RetentionInterval",
+    "YouTubeRetentionReport",
+    "RetentionEnrichedCandidate",
+    "YouTubeEnrichmentRequest",
+    "YouTubeEnrichmentResponse",
 ]
 

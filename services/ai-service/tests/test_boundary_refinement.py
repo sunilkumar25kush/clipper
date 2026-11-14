@@ -299,3 +299,4 @@ def test_api_refinement_endpoint():
     assert first["boundary_confidence"] >= 0.85
     assert "opening_context" in first
     assert "closing_context" in first
+
