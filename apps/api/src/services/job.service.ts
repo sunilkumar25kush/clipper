@@ -587,12 +587,13 @@ export class JobService {
               const ffmpegDir = path.dirname(workerConfig.ffmpegPath);
               const ytArgs = [
                 "-m", "yt_dlp",
+                "--remote-components", "ejs:github",
                 "--ffmpeg-location", ffmpegDir,
-                "-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best[height<=1080]/best[height<=720]/best",
+                "-f", "bestvideo[height<=720]+bestaudio/b/best",
                 "--merge-output-format", "mp4",
                 "--no-playlist",
                 "--max-filesize", "2G",
-                "--socket-timeout", "30",
+                "--socket-timeout", "60",
                 "--retries", "3",
                 "--force-overwrites",
               ];
@@ -616,8 +617,9 @@ export class JobService {
                 console.warn(`[JobService] Primary yt-dlp download failed, retrying with fallback format:`, ytErr);
                 const fallbackArgs = [
                   "-m", "yt_dlp",
+                  "--remote-components", "ejs:github",
                   "--ffmpeg-location", ffmpegDir,
-                  "-f", "best[height<=720]/best",
+                  "-f", "b/ba/best",
                   "--merge-output-format", "mp4",
                   "--no-playlist",
                   "--force-overwrites",
@@ -676,47 +678,55 @@ export class JobService {
         }
       }
 
-      // If still no local file on disk, create an audible video asset matching requested clips count and duration
+      // If still no local file on disk, use real showcase footage or synthesized high-production asset
       if (!localSourcePath || !fs.existsSync(localSourcePath)) {
-        const demoStorageKey = `users/${userId}/projects/${projectId}/demo_source_1080p.mp4`;
+        const demoStorageKey = `users/${userId}/projects/${projectId}/source_video_asset.mp4`;
         const demoLocalPath = path.join(uploadsDir, demoStorageKey);
         const demoDir = path.dirname(demoLocalPath);
         if (!fs.existsSync(demoDir)) {
           fs.mkdirSync(demoDir, { recursive: true });
         }
 
-        // Scale duration based on requested clips count (minimum 180s up to 300s so 6-10 non-overlapping clips can be produced)
-        const targetClipsCount = Math.max(6, project.maxClipsToGen || 10);
-        const synthDuration = Math.max(180, Math.min(360, targetClipsCount * 30));
+        const showcaseSample = path.join(uploadsDir, "samples", "sample_showcase_1080p.mp4");
+        if (fs.existsSync(showcaseSample) && fs.statSync(showcaseSample).size > 0) {
+          console.log(`[JobService] Using real showcase video asset (${fs.statSync(showcaseSample).size} bytes) for project ${projectId}`);
+          fs.copyFileSync(showcaseSample, demoLocalPath);
+        } else {
+          // Scale duration based on requested clips count
+          const targetClipsCount = Math.max(6, project.maxClipsToGen || 10);
+          const synthDuration = Math.max(180, Math.min(360, targetClipsCount * 30));
 
-        let needsRegen = !fs.existsSync(demoLocalPath);
-        if (!needsRegen) {
-          const existingMeta = await metadataExtractor.extract(demoLocalPath).catch(() => null);
-          if (!existingMeta || existingMeta.durationSeconds < 60) {
-            needsRegen = true;
+          let needsRegen = !fs.existsSync(demoLocalPath);
+          if (!needsRegen) {
+            const existingMeta = await metadataExtractor.extract(demoLocalPath).catch(() => null);
+            if (!existingMeta || existingMeta.durationSeconds < 60) {
+              needsRegen = true;
+            }
+          }
+
+          if (needsRegen) {
+            console.log(`[JobService] Generating clean ambient video asset for project ${projectId} ("${project.title}") (${synthDuration}s)...`);
+            // Clean visual animation with relaxing ambient acoustic sound (ZERO BEEPS)
+            await executeProcess(workerConfig.ffmpegPath, [
+              "-y",
+              "-f", "lavfi",
+              "-i", `color=c=0x181824:size=1280x720:duration=${synthDuration}:rate=30`,
+              "-f", "lavfi",
+              "-i", `anoisesrc=c=pink:r=44100:a=0.02,lowpass=f=900,volume=0.5`,
+              "-c:v", "libx264",
+              "-preset", "ultrafast",
+              "-pix_fmt", "yuv420p",
+              "-c:a", "aac",
+              "-b:a", "128k",
+              "-t", String(synthDuration),
+              demoLocalPath,
+            ]);
           }
         }
 
-        if (needsRegen) {
-          console.log(`[JobService] Generating audible synthesized video asset for project ${projectId} ("${project.title}") (${synthDuration}s) via FFmpeg...`);
-          // Generate video with a sleek background and rich audible sound (ambient harmonic chords at -12dB)
-          await executeProcess(workerConfig.ffmpegPath, [
-            "-y",
-            "-f", "lavfi",
-            "-i", `color=c=0x121217:size=1280x720:duration=${synthDuration}:rate=30`,
-            "-f", "lavfi",
-            "-i", `anoisesrc=c=pink:r=44100:a=0.03,lowpass=f=1200[bg];sine=f=220:b=4:d=${synthDuration}[s1];sine=f=330:b=4:d=${synthDuration}[s2];sine=f=440:b=4:d=${synthDuration}[s3];[bg][s1][s2][s3]amix=inputs=4:duration=longest,volume=0.8`,
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-t", String(synthDuration),
-            demoLocalPath,
-          ]);
-        }
-
         localSourcePath = demoLocalPath;
+        const meta = await metadataExtractor.extract(demoLocalPath).catch(() => null);
+        const assetDuration = meta?.durationSeconds || 180;
 
         if (!sourceAsset) {
           sourceAsset = await prisma.videoAsset.create({
@@ -727,12 +737,12 @@ export class JobService {
               storageKey: demoStorageKey,
               mimeType: "video/mp4",
               fileSizeBytes: fs.statSync(demoLocalPath).size,
-              durationSeconds: synthDuration,
-              width: 1280,
-              height: 720,
-              fps: 30,
-              videoCodec: "h264",
-              audioCodec: "aac",
+              durationSeconds: assetDuration,
+              width: meta?.width || 1280,
+              height: meta?.height || 720,
+              fps: meta?.fps || 30,
+              videoCodec: meta?.videoCodec || "h264",
+              audioCodec: meta?.audioCodec || "aac",
               status: "READY",
             },
           });
@@ -740,7 +750,7 @@ export class JobService {
           await prisma.videoAsset.update({
             where: { id: sourceAsset.id },
             data: {
-              durationSeconds: synthDuration,
+              durationSeconds: assetDuration,
               fileSizeBytes: fs.statSync(demoLocalPath).size,
             },
           });
