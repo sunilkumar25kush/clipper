@@ -1,4 +1,5 @@
 import re
+import math
 import logging
 from typing import List, Optional, Dict, Any
 from app.schemas.transcript import (

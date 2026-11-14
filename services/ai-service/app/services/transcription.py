@@ -1,4 +1,5 @@
 import os
+import json
 import uuid
 import wave
 import logging
@@ -61,6 +62,20 @@ class TranscriptionService:
             f"duration={total_duration}s, file={request.audio_path}"
         )
 
+        # Check for pre-existing cached transcript to skip expensive Whisper re-computation on retries
+        cache_path = request.audio_path + ".transcript.json"
+        if os.path.exists(cache_path) and os.path.getsize(cache_path) > 100:
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    cached_data = json.load(f)
+                logger.info(
+                    f"[Transcription] Loaded cached transcript for {request.project_id} from {cache_path} "
+                    f"({len(cached_data.get('segments', []))} segments, {cached_data.get('word_count', 0)} words)"
+                )
+                return TranscriptResponse(**cached_data)
+            except Exception as e:
+                logger.warning(f"[Transcription] Failed to load cache from {cache_path}: {e}")
+
         use_native = model_manager.is_faster_whisper_supported()
 
         if use_native:
@@ -92,7 +107,7 @@ class TranscriptionService:
 
         unique_speakers = sorted(list({s.speaker_id for s in segments}))
 
-        return TranscriptResponse(
+        response = TranscriptResponse(
             id=str(uuid.uuid4()),
             project_id=request.project_id,
             language=detected_lang,
@@ -103,6 +118,15 @@ class TranscriptionService:
             speakers_detected=unique_speakers,
             segments=segments,
         )
+
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(response.model_dump(), f)
+            logger.info(f"[Transcription] Successfully cached transcript to {cache_path}")
+        except Exception as e:
+            logger.warning(f"[Transcription] Could not cache transcript to {cache_path}: {e}")
+
+        return response
 
     def _transcribe_native(
         self,

@@ -122,6 +122,18 @@ export class AutomaticClipGenerator {
     // Extract source metadata once for all candidate clips to eliminate repeated ffprobe overhead
     const sourceMeta = await metadataExtractor.extract(sourceVideoPath);
 
+    // Query already rendered clips for this project to enable intelligent resumption on retry/failure
+    const existingClips = await prisma.clip.findMany({
+      where: {
+        projectId,
+        status: "READY",
+        isDeleted: false,
+      },
+      include: {
+        exports: { where: { status: "READY" } },
+      },
+    });
+
     // Simple bounded concurrency runner
     const queue = [...candidates.map((cand, idx) => ({ cand, rankOrder: idx + 1 }))];
 
@@ -131,6 +143,42 @@ export class AutomaticClipGenerator {
         if (!item) break;
 
         const { cand, rankOrder } = item;
+
+        // Check if an identical clip has already been rendered in a previous run
+        const existing = existingClips.find(
+          (ec) =>
+            Math.abs(ec.startTime - cand.start) < 0.35 &&
+            Math.abs(ec.endTime - cand.end) < 0.35 &&
+            ec.exports.length > 0
+        );
+
+        if (existing && existing.exports[0]) {
+          console.log(`[AutomaticClipGenerator] Clip #${rankOrder} ("${cand.title}") was already rendered, reusing existing asset!`);
+          results.push({
+            clipId: existing.id,
+            exportId: existing.exports[0].id,
+            title: existing.title,
+            duration: existing.duration,
+            videoStorageKey: existing.exports[0].storageKey,
+            thumbnailStorageKey: existing.thumbnailKey || "",
+            metadata: {
+              durationSeconds: existing.duration,
+              width: 1080,
+              height: 1920,
+              fps: 30,
+              videoCodec: "h264",
+              audioCodec: "aac",
+              hasAudio: true,
+              fileSizeBytes: Number(existing.exports[0].fileSizeBytes || 0),
+            } as unknown as VideoMetadata,
+          });
+          completedCount++;
+          if (onClipRendered) {
+            await onClipRendered(completedCount, totalClips);
+          }
+          continue;
+        }
+
         const result = await this.renderSingleClip({
           jobId,
           projectId,
@@ -299,12 +347,18 @@ export class AutomaticClipGenerator {
           args.push("-vf", videoFilter);
         }
 
-        args.push(
-          "-c:v", "libx264",
-          "-preset", workerConfig.defaultPreset,
-          "-crf", workerConfig.defaultCrf.toString(),
-          "-pix_fmt", "yuv420p"
-        );
+        // Hardware-accelerated encoding check: on Windows, h264_mf (Media Foundation GPU MFT) delivers 10x-15x real-time speed
+        const useHardwareEncoder = process.platform === "win32" && process.env.FFMPEG_HW_ACCEL !== "false";
+        if (useHardwareEncoder) {
+          args.push("-c:v", "h264_mf", "-b:v", "3500k");
+        } else {
+          args.push(
+            "-c:v", "libx264",
+            "-preset", workerConfig.defaultPreset,
+            "-crf", workerConfig.defaultCrf.toString(),
+            "-pix_fmt", "yuv420p"
+          );
+        }
 
         if (sourceMeta.hasAudio) {
           args.push("-c:a", "aac", "-b:a", `${workerConfig.defaultAudioBitrateKbps}k`);
@@ -397,72 +451,61 @@ export class AutomaticClipGenerator {
       }
 
       // 8. Persist Clip, ClipScore, ClipCaption, and Export in PostgreSQL
+      // Use single atomic nested create - completely eliminates interactive transaction timeouts!
       const prismaCategory = mapClipCategory(candidate.category);
 
-      await prisma.$transaction(async (tx) => {
-        // Create Clip
-        await tx.clip.create({
-          data: {
-            id: clipId,
-            projectId,
-            rankOrder,
-            partNumber: candidate.partNumber ?? null,
-            title: candidate.title.slice(0, 255),
-            description: candidate.reason.slice(0, 500),
-            category: prismaCategory,
-            selectionReason: candidate.reason,
-            startTime: candidate.start,
-            endTime: candidate.end,
-            duration: finalMeta.durationSeconds,
-            aspectRatio: targetAspect,
-            cropMode,
-            thumbnailKey: thumbUpload.storageKey,
-            status: "READY",
+      await prisma.clip.create({
+        data: {
+          id: clipId,
+          projectId,
+          rankOrder,
+          partNumber: candidate.partNumber ?? null,
+          title: candidate.title.slice(0, 255),
+          description: candidate.reason.slice(0, 500),
+          category: prismaCategory,
+          selectionReason: candidate.reason,
+          startTime: candidate.start,
+          endTime: candidate.end,
+          duration: finalMeta.durationSeconds,
+          aspectRatio: targetAspect,
+          cropMode,
+          thumbnailKey: thumbUpload.storageKey,
+          status: "READY",
+          score: {
+            create: {
+              hookScore: candidate.scores.hook,
+              engagementScore: candidate.scores.engagement,
+              contextScore: candidate.scores.context,
+              overallScore: candidate.scores.overall,
+              confidence: 0.90,
+            },
           },
-        });
-
-        // Create ClipScore
-        await tx.clipScore.create({
-          data: {
-            clipId,
-            hookScore: candidate.scores.hook,
-            engagementScore: candidate.scores.engagement,
-            contextScore: candidate.scores.context,
-            overallScore: candidate.scores.overall,
-            confidence: 0.90,
+          caption: {
+            create: {
+              presetId: subtitlePreset.toString().toLowerCase(),
+              fontFamily: params.fontFamily || "Arial",
+              fontSize: params.fontSize || 26,
+              primaryColorHex: "#FFFFFF",
+              highlightColorHex: "#FACC15",
+              strokeColorHex: "#000000",
+              wordsPerLine: 3,
+              captionsJson,
+            },
           },
-        });
-
-        // Create ClipCaption
-        await tx.clipCaption.create({
-          data: {
-            clipId,
-            presetId: subtitlePreset.toString().toLowerCase(),
-            fontFamily: params.fontFamily || "Arial",
-            fontSize: params.fontSize || 26,
-            primaryColorHex: "#FFFFFF",
-            highlightColorHex: "#FACC15",
-            strokeColorHex: "#000000",
-            wordsPerLine: 3,
-            captionsJson,
+          exports: {
+            create: {
+              id: exportId,
+              storageBucket: videoUpload.storageBucket,
+              storageKey: videoUpload.storageKey,
+              resolution: getExportResolution(targetAspect),
+              aspectRatio: targetAspect,
+              hasWatermark: false,
+              fileSizeBytes: videoUpload.fileSizeBytes,
+              status: "READY",
+            },
           },
-        });
-
-        // Create Export
-        await tx.export.create({
-          data: {
-            id: exportId,
-            clipId,
-            storageBucket: videoUpload.storageBucket,
-            storageKey: videoUpload.storageKey,
-            resolution: getExportResolution(targetAspect),
-            aspectRatio: targetAspect,
-            hasWatermark: false,
-            fileSizeBytes: videoUpload.fileSizeBytes,
-            status: "READY",
-          },
-        });
-      }, { maxWait: 10000, timeout: 30000 });
+        },
+      });
 
       return {
         clipId,

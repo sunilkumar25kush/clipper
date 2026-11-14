@@ -760,14 +760,16 @@ export class JobService {
       // 2. Stage: EXTRACTING (Audio Extraction via FFmpeg 16kHz Mono)
       await this.updateJobStage(jobId, projectId, ProcessingState.EXTRACTING, 25, "Extracting speech-band 16kHz audio track via FFmpeg...");
       const audioWavPath = localSourcePath.replace(/\.[^/.]+$/, "") + "_16k_mono.wav";
-      if (fs.existsSync(audioWavPath)) {
-        try { fs.unlinkSync(audioWavPath); } catch {}
-      }
-      try {
-        await audioExtractor.extractSpeechAudio(localSourcePath, audioWavPath);
-        console.log(`[JobService] Successfully extracted 16kHz speech audio to ${audioWavPath}`);
-      } catch (audioErr) {
-        console.warn(`[JobService] Audio extraction warning (proceeding if video contains valid audio):`, audioErr);
+      const hasValidWav = fs.existsSync(audioWavPath) && fs.statSync(audioWavPath).size > 10000;
+      if (!hasValidWav) {
+        try {
+          await audioExtractor.extractSpeechAudio(localSourcePath, audioWavPath);
+          console.log(`[JobService] Successfully extracted 16kHz speech audio to ${audioWavPath}`);
+        } catch (audioErr) {
+          console.warn(`[JobService] Audio extraction warning (proceeding if video contains valid audio):`, audioErr);
+        }
+      } else {
+        console.log(`[JobService] Reusing existing 16kHz speech audio (${fs.statSync(audioWavPath).size} bytes) for project ${projectId}, skipping extraction!`);
       }
 
       // 3. Stage: TRANSCRIBING (Faster-Whisper Transcription with Millisecond Word Timestamps)
