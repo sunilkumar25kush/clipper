@@ -31,3 +31,4 @@ async def get_scoring_weights():
     Returns default scoring weight profiles across all 9 categories.
     """
     return {cat.value: weights for cat, weights in DEFAULT_CATEGORY_WEIGHTS.items()}
+

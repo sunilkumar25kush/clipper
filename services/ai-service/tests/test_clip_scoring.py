@@ -425,3 +425,4 @@ def test_api_scoring_weights_endpoint():
     assert "life_lesson" in weights
     assert "humor_quality" in weights["funny"]
     assert "educational_value" in weights["educational"]
+

@@ -34,6 +34,11 @@ from app.schemas.scoring import (
     ScoringRankingRequest,
     ScoringRankingResponse,
 )
+from app.schemas.refinement import (
+    RefinedBoundaryCandidate,
+    BoundaryRefinementRequest,
+    BoundaryRefinementResponse,
+)
 
 __all__ = [
     "WordTimestamp",
@@ -61,5 +66,8 @@ __all__ = [
     "ScoredHighlightCandidate",
     "ScoringRankingRequest",
     "ScoringRankingResponse",
+    "RefinedBoundaryCandidate",
+    "BoundaryRefinementRequest",
+    "BoundaryRefinementResponse",
 ]
 
