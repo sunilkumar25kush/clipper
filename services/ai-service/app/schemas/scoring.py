@@ -69,6 +69,7 @@ class ScoringRankingRequest(BaseModel):
     diversity_penalty: float = Field(default=0.20, ge=0.0, le=0.50, description="Penalty factor for near-duplicate semantic topics")
     temporal_iou_threshold: float = Field(default=0.15, ge=0.05, le=0.50, description="Maximum allowed temporal overlap IoU")
     custom_weights: Optional[Dict[str, Dict[str, float]]] = Field(default=None, description="Optional override weights per category")
+    custom_instructions: Optional[str] = Field(default=None, description="Optional user custom instructions to prioritize")
 
 class ScoringRankingResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")

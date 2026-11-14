@@ -99,6 +99,8 @@ export class VideoUploadService {
           minClipDuration: input.minClipDuration,
           maxClipDuration: input.maxClipDuration,
           maxClipsToGen: input.maxClipsToGen,
+          generationMode: (input.generationMode as any) || "HIGHLIGHTS",
+          customInstructions: input.customInstructions || null,
           expiresAt,
         },
       });
@@ -261,6 +263,8 @@ export class VideoUploadService {
       minClipDuration: project.minClipDuration,
       maxClipDuration: project.maxClipDuration,
       maxClipsToGen: project.maxClipsToGen,
+      generationMode: project.generationMode as any,
+      customInstructions: project.customInstructions,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
     };

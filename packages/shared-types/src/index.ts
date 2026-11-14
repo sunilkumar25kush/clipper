@@ -5,6 +5,11 @@ export enum PlanTier {
   BUSINESS = "BUSINESS",
 }
 
+export enum GenerationMode {
+  HIGHLIGHTS = "HIGHLIGHTS",
+  PARTS = "PARTS",
+}
+
 export enum ProjectStatus {
   DRAFT = "DRAFT",
   UPLOADED = "UPLOADED",
@@ -55,6 +60,8 @@ export interface ProcessingJobDTO {
 
 export interface CreateProcessingJobRequest {
   projectId: string;
+  generationMode?: GenerationMode;
+  customInstructions?: string | null;
   targetAspect?: AspectRatio;
   minClipDuration?: number;
   maxClipDuration?: number;
@@ -99,6 +106,7 @@ export enum ClipCategory {
   MOTIVATIONAL = "MOTIVATIONAL",
   DISCUSSION = "DISCUSSION",
   INSIGHT = "INSIGHT",
+  PART = "PART",
 }
 
 export enum AspectRatio {
@@ -149,6 +157,8 @@ export interface VideoProjectDTO {
   sourceType: "FILE_UPLOAD" | "AUTHORIZED_URL";
   sourceUrl?: string | null;
   status: ProjectStatus;
+  generationMode?: GenerationMode;
+  customInstructions?: string | null;
   targetAspect: AspectRatio;
   minClipDuration: number;
   maxClipDuration: number;
@@ -165,6 +175,7 @@ export interface ClipDTO {
   projectId: string;
   projectTitle?: string;
   rankOrder: number;
+  partNumber?: number | null;
   title: string;
   description: string;
   category: ClipCategory;

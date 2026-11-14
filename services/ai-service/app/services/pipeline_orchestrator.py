@@ -21,6 +21,7 @@ from app.services.highlight_discovery import highlight_discovery_engine
 from app.services.clip_scorer import clip_scoring_engine
 from app.services.boundary_refinement import intelligent_boundary_refiner
 from app.services.youtube_signals import youtube_signal_service
+from app.services.parts_segmentation import parts_segmentation_engine
 
 logger = logging.getLogger("clipforge.pipeline_orchestrator")
 
@@ -100,6 +101,38 @@ class ContentIntelligencePipeline:
         )
 
         # -------------------------------------------------------------
+        # 3B. SPECIALIZED GENERATION MODE: PARTS / SPLIT VIDEO
+        # -------------------------------------------------------------
+        if request.generation_mode and request.generation_mode.lower() in ("parts", "split_parts", "split_video_into_parts"):
+            logger.info(f"[Pipeline] Processing video in PARTS mode for project '{request.project_id}'.")
+            part_clips = parts_segmentation_engine.segment_into_parts(
+                transcript=cleaned_transcript,
+                video_duration=request.video_duration,
+                video_title=request.video_title,
+                custom_instructions=request.custom_instructions,
+                target_min_duration=request.min_clip_duration or 45.0,
+                target_max_duration=request.max_clip_duration or 300.0,
+            )
+            stages_completed.extend([
+                "semantic_chunking",
+                "parts_segmentation",
+                "timeline_coverage_validated",
+            ])
+            return PipelineProcessResponse(
+                status="completed",
+                project_id=request.project_id,
+                video_duration=request.video_duration,
+                clips_generated=len(part_clips),
+                message=(
+                    f"Successfully segmented video into {len(part_clips)} sequential chronological parts covering the entire timeline."
+                    if part_clips
+                    else "Unable to divide video into meaningful chronological parts."
+                ),
+                clips=part_clips,
+                stages_completed=stages_completed,
+            )
+
+        # -------------------------------------------------------------
         # 4. MULTI-CATEGORY HIGHLIGHT DISCOVERY
         # -------------------------------------------------------------
         discovery_req = HighlightDiscoveryRequest(
@@ -109,6 +142,7 @@ class ContentIntelligencePipeline:
             target_categories=request.target_categories,
             min_duration=request.min_clip_duration,
             max_duration=request.max_clip_duration,
+            custom_instructions=request.custom_instructions,
         )
         discovery_res = highlight_discovery_engine.discover_highlights(discovery_req)
         stages_completed.append("highlight_discovery")
@@ -138,6 +172,7 @@ class ContentIntelligencePipeline:
             video_duration=request.video_duration,
             max_clips_to_select=request.max_clips,
             min_overall_score=65.0,
+            custom_instructions=request.custom_instructions,
         )
         scoring_res = clip_scoring_engine.evaluate_and_rank(scoring_req)
         stages_completed.append("quality_scoring")

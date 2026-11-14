@@ -35,6 +35,7 @@ export interface ClipCandidateInput {
     overall: number;
   };
   focusXNormalized?: number;
+  partNumber?: number;
 }
 
 export interface GenerateClipsJobOptions {
@@ -64,11 +65,11 @@ export interface GeneratedClipResult {
 }
 
 // Map string category to Prisma ClipCategory enum
-function mapClipCategory(cat: string): "HOOK" | "FUNNY" | "EDUCATIONAL" | "EMOTIONAL" | "STORYTELLING" | "MOTIVATIONAL" | "DISCUSSION" | "INSIGHT" {
+function mapClipCategory(cat: string): "HOOK" | "FUNNY" | "EDUCATIONAL" | "EMOTIONAL" | "STORYTELLING" | "MOTIVATIONAL" | "DISCUSSION" | "INSIGHT" | "PART" {
   const norm = cat.toUpperCase().trim().replace(/ /g, "_");
-  const valid = ["HOOK", "FUNNY", "EDUCATIONAL", "EMOTIONAL", "STORYTELLING", "MOTIVATIONAL", "DISCUSSION", "INSIGHT"];
+  const valid = ["HOOK", "FUNNY", "EDUCATIONAL", "EMOTIONAL", "STORYTELLING", "MOTIVATIONAL", "DISCUSSION", "INSIGHT", "PART"];
   if (valid.includes(norm)) {
-    return norm as "HOOK" | "FUNNY" | "EDUCATIONAL" | "EMOTIONAL" | "STORYTELLING" | "MOTIVATIONAL" | "DISCUSSION" | "INSIGHT";
+    return norm as any;
   }
   return "INSIGHT";
 }
@@ -288,6 +289,7 @@ export class AutomaticClipGenerator {
             id: clipId,
             projectId,
             rankOrder,
+            partNumber: candidate.partNumber ?? null,
             title: candidate.title.slice(0, 255),
             description: candidate.reason.slice(0, 500),
             category: prismaCategory,

@@ -36,6 +36,8 @@ interface VideoUploaderProps {
   minClipDuration: number;
   maxClipDuration: number;
   rightsAttested: boolean;
+  generationMode?: "HIGHLIGHTS" | "PARTS";
+  customInstructions?: string;
   onUploadSuccess: (project: VideoProjectDTO) => void;
   onCancel?: () => void;
 }
@@ -47,6 +49,8 @@ export function VideoUploader({
   minClipDuration,
   maxClipDuration,
   rightsAttested,
+  generationMode = "HIGHLIGHTS",
+  customInstructions,
   onUploadSuccess,
   onCancel,
 }: VideoUploaderProps) {
@@ -203,6 +207,9 @@ export function VideoUploader({
           targetAspect,
           minClipDuration,
           maxClipDuration,
+          maxClipsToGen: 10,
+          generationMode,
+          customInstructions: customInstructions?.trim() || undefined,
           rightsAttested: true,
         }),
       });

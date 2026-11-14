@@ -136,3 +136,4 @@ class TestEvaluationAndRegression:
         res_metrics = client.get("/api/v1/evaluation/metrics")
         assert res_metrics.status_code == 200
         assert res_metrics.json()["status"] == "ok"
+

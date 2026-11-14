@@ -173,6 +173,8 @@ export class JobService {
         minClipDuration: input.minClipDuration || project.minClipDuration,
         maxClipDuration: input.maxClipDuration || project.maxClipDuration,
         maxClipsToGen: input.maxClipsToGen || project.maxClipsToGen,
+        generationMode: input.generationMode || project.generationMode,
+        customInstructions: input.customInstructions || project.customInstructions || undefined,
       });
     } else {
       // Execute asynchronously so HTTP response returns 202 immediately and pipeline runs in background
@@ -713,6 +715,7 @@ export class JobService {
       await this.updateJobStage(jobId, projectId, ProcessingState.ANALYZING, 55, "Discovering semantic highlights across 9 value categories with AI...");
 
       const aiServiceUrl = process.env.AI_SERVICE_INTERNAL_URL || process.env.AI_SERVICE_URL || "http://localhost:8000";
+      const isPartsMode = project.generationMode === "PARTS" || (project.generationMode as string) === "SPLIT_PARTS";
       let pipelineClips: Array<{
         title: string;
         start: number;
@@ -722,19 +725,22 @@ export class JobService {
         reason?: string;
         scores?: Record<string, number>;
         subtitle_text?: string;
+        part_number?: number;
         words?: Array<{ word: string; start: number; end: number; probability?: number }>;
       }> = [];
 
       try {
-        console.log(`[JobService] Calling Content Intelligence Pipeline at ${aiServiceUrl}/api/v1/pipeline/process...`);
+        console.log(`[JobService] Calling Content Intelligence Pipeline at ${aiServiceUrl}/api/v1/pipeline/process (mode: ${project.generationMode || "HIGHLIGHTS"})...`);
         const pipelinePayload = {
           project_id: projectId,
           audio_path: fs.existsSync(audioWavPath) ? audioWavPath : undefined,
           video_duration: videoDuration,
           video_title: project.title || "Featured Video",
-          min_clip_duration: project.minClipDuration || 15,
-          max_clip_duration: project.maxClipDuration || 60,
-          max_clips: Math.min(5, project.maxClipsToGen || 5),
+          min_clip_duration: project.minClipDuration || (isPartsMode ? 45 : 15),
+          max_clip_duration: project.maxClipDuration || (isPartsMode ? 300 : 60),
+          max_clips: project.maxClipsToGen || 10,
+          generation_mode: isPartsMode ? "parts" : "highlights",
+          custom_instructions: project.customInstructions || undefined,
         };
 
         const aiResponse = await fetch(`${aiServiceUrl}/api/v1/pipeline/process`, {
@@ -764,15 +770,18 @@ export class JobService {
       // If AI service was unreachable and returned no clips, fallback to geminiService
       if (pipelineClips.length === 0) {
         console.log(`[JobService] Using Gemini content analysis fallback for project ${projectId}...`);
+        const targetClipsCount = project.maxClipsToGen || 10;
         const aiAnalysis = await geminiService.identifyContentAndClips({
           videoTitle: project.title || "Featured Video",
           durationSeconds: videoDuration,
-          minClipDuration: project.minClipDuration || 15,
-          maxClipDuration: project.maxClipDuration || 60,
+          minClipDuration: project.minClipDuration || (isPartsMode ? 45 : 15),
+          maxClipDuration: project.maxClipDuration || (isPartsMode ? 300 : 60),
           targetAspect: project.targetAspect || "9:16",
-          count: Math.min(3, project.maxClipsToGen || 3),
+          count: targetClipsCount,
+          customInstructions: project.customInstructions || undefined,
+          generationMode: project.generationMode || "HIGHLIGHTS",
         });
-        pipelineClips = aiAnalysis.clips.map((c) => ({
+        pipelineClips = aiAnalysis.clips.map((c, idx) => ({
           title: c.title,
           start: c.start,
           end: c.end,
@@ -781,6 +790,7 @@ export class JobService {
           reason: c.reason,
           scores: c.scores,
           subtitle_text: c.subtitleText,
+          part_number: isPartsMode ? idx + 1 : undefined,
         }));
       }
 
@@ -790,7 +800,9 @@ export class JobService {
         projectId,
         ProcessingState.SELECTING_CLIPS,
         70,
-        `Selected ${pipelineClips.length} qualified highlights for "${project.title || "Video"}"...`,
+        isPartsMode
+          ? `Divided video into ${pipelineClips.length} chronological parts...`
+          : `Selected ${pipelineClips.length} qualified highlights for "${project.title || "Video"}"...`,
       );
 
       // 6. Stage: RENDERING (FFmpeg vertical 9:16 cropping, ASS subtitles, thumbnails)
@@ -809,8 +821,9 @@ export class JobService {
           start: c.start,
           end: c.end,
           duration: c.duration,
-          category: c.category || "educational",
-          reason: c.reason || "High-value highlight moment",
+          category: c.category || (isPartsMode ? "PART" : "educational"),
+          reason: c.reason || (isPartsMode ? `Part of ${project.title || "Video"}` : "High-value highlight moment"),
+          partNumber: c.part_number,
           scores: {
             hook: sc.hook_strength ?? sc.hook ?? 85,
             engagement: sc.engagement ?? 85,
@@ -1044,7 +1057,7 @@ export class JobService {
           targetAspect: (job.project.targetAspect as AspectRatio) || AspectRatio.RATIO_9_16,
           minClipDuration: job.project.minClipDuration || 15,
           maxClipDuration: job.project.maxClipDuration || 60,
-          maxClipsToGen: job.project.maxClipsToGen || 3,
+          maxClipsToGen: job.project.maxClipsToGen || 10,
         },
       ).catch((err) => {
         console.error(`[JobService] Failed to process pending job ${job.id}:`, err);

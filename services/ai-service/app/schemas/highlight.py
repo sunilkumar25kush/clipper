@@ -108,6 +108,7 @@ class HighlightDiscoveryRequest(BaseModel):
     transcript_id: Optional[str] = Field(default=None, description="Optional ID of saved transcript")
     transcript: Optional[TranscriptResponse] = Field(default=None, description="Direct transcript object if available")
     video_title: Optional[str] = Field(default=None, description="Optional title of the video for contextual framing")
+    custom_instructions: Optional[str] = Field(default=None, description="User custom guidance for clip discovery")
     target_categories: Optional[List[HighlightCategory]] = Field(
         default=None,
         description="Filter for specific categories, or None to discover across all 9"

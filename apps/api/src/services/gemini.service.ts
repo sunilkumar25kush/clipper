@@ -31,6 +31,8 @@ export interface IdentifyContentOptions {
   targetAspect?: string;
   count?: number;
   transcriptSample?: string;
+  customInstructions?: string;
+  generationMode?: string;
 }
 
 export class GeminiService {
@@ -56,36 +58,39 @@ export class GeminiService {
       durationSeconds,
       minClipDuration = 15,
       maxClipDuration = 60,
-      count = 3,
+      count = 10,
       targetAspect = "9:16",
       transcriptSample,
+      customInstructions,
+      generationMode = "HIGHLIGHTS",
     } = options;
 
     const cleanTitle = videoTitle?.trim() || "Featured Video";
     const videoDur = Math.max(15, Math.round(durationSeconds));
-    const targetCount = Math.min(
-      5,
-      Math.max(1, count, Math.floor(videoDur / minClipDuration)),
-    );
+    const isParts = generationMode === "PARTS" || generationMode === "SPLIT_PARTS";
+    const maxPossible = Math.max(1, Math.floor(videoDur / Math.max(10, minClipDuration)));
+    const targetCount = Math.min(count, maxPossible);
 
-    const prompt = `You are an expert AI video editor and viral short-form content strategist.
+    const prompt = `You are an expert AI video editor and content strategist.
 Analyze this video:
 - Video Title: "${cleanTitle}"
 - Total Duration: ${videoDur} seconds
 - Target Aspect Ratio: ${targetAspect} vertical short
-- Number of clips requested: ${targetCount}
-- Clip duration limits: minimum ${minClipDuration} seconds, maximum ${maxClipDuration} seconds.
+- Generation Mode: ${isParts ? "CHRONOLOGICAL PARTS (Divide entire video into sequential Part 1, Part 2, ...)" : "AI SMART HIGHLIGHTS"}
+- Number of sections/clips requested: ${targetCount}
+- Duration limits: minimum ${minClipDuration} seconds, maximum ${maxClipDuration} seconds.
+${customInstructions ? `- USER CUSTOM INSTRUCTIONS (MANDATORY TO FOLLOW): "${customInstructions}"` : ""}
 ${transcriptSample ? `- Transcript Context: "${transcriptSample}"` : ""}
 
 Task:
-1. Identify the core topics, themes, and emotional hooks of this video based on its title and context.
-2. Select ${targetCount} distinct high-retention segments spanning across the video timeline (start and end within 0 and ${videoDur}s).
-3. MANDATORY REQUIREMENT: Every single clip title MUST incorporate and start with the video title "${cleanTitle}". Format: "${cleanTitle}: <Compelling Hook / Key Scene>".
+1. Identify the core topics, themes, and emotional hooks of this video based on its title and context${customInstructions ? `, prioritizing user custom instructions` : ""}.
+2. ${isParts ? `Divide the video sequentially into ${targetCount} continuous chronological parts (Part 1, Part 2, ...) covering the video timeline from 0 to ${videoDur}s without gaps.` : `Select up to ${targetCount} distinct high-retention highlights spanning across the video timeline.`}
+3. MANDATORY REQUIREMENT: Every single clip title MUST incorporate the video title "${cleanTitle}". ${isParts ? `Format: "${cleanTitle} - Part 1: <Topic>"` : `Format: "${cleanTitle}: <Compelling Hook / Key Scene>"`}.
 4. For each clip, provide:
-   - A spoken subtitle sentence (realistic dialogue/script) directly relevant to this video's specific subject matter.
-   - A category (HOOK, EDUCATIONAL, MOTIVATIONAL, FUNNY, STORYTELLING, or INSIGHT).
-   - A strategic reason why this clip hooks viewers.
-   - Viral score ratings between 85 and 98 for hook, engagement, context, and overall.
+   - A spoken subtitle sentence directly relevant to this video's specific subject matter.
+   - A category (${isParts ? "PART" : "HOOK, EDUCATIONAL, MOTIVATIONAL, FUNNY, STORYTELLING, or INSIGHT"}).
+   - A strategic reason why this moment was selected.
+   - Quality score ratings between 85 and 98 for hook, engagement, context, and overall.
 
 Respond strictly with valid JSON matching this schema:
 {
@@ -93,10 +98,10 @@ Respond strictly with valid JSON matching this schema:
   "clips": [
     {
       "start": 0,
-      "end": 30,
-      "title": "${cleanTitle}: <Specific Hook / Scene>",
-      "category": "HOOK",
-      "reason": "Why this moment grabs immediate viewer retention",
+      "end": ${Math.min(30, videoDur)},
+      "title": "${cleanTitle}${isParts ? " - Part 1: " : ": "}<Specific Topic / Scene>",
+      "category": "${isParts ? "PART" : "HOOK"}",
+      "reason": "Why this moment was selected",
       "scores": {
         "hook": 95,
         "engagement": 92,

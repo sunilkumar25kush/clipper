@@ -38,6 +38,7 @@ type ClipWithRelations = {
   projectId: string;
   project?: { title: string } | null;
   rankOrder: number;
+  partNumber?: number | null;
   title: string;
   description: string;
   category: unknown;
@@ -168,6 +169,8 @@ export class ProjectService {
       minClipDuration: p.minClipDuration,
       maxClipDuration: p.maxClipDuration,
       maxClipsToGen: p.maxClipsToGen,
+      generationMode: p.generationMode as any,
+      customInstructions: p.customInstructions,
       clipCount: p._count.clips,
       activeJobProgress: p.jobs[0]?.progressPercent ?? null,
       activeJobStage: (p.jobs[0]?.stage as unknown as JobStage) ?? null,
@@ -180,6 +183,7 @@ export class ProjectService {
       projectId: c.projectId,
       projectTitle: c.project?.title,
       rankOrder: c.rankOrder,
+      partNumber: c.partNumber,
       title: c.title,
       description: c.description,
       category: c.category as unknown as ClipCategory,
@@ -276,6 +280,8 @@ export class ProjectService {
       minClipDuration: p.minClipDuration,
       maxClipDuration: p.maxClipDuration,
       maxClipsToGen: p.maxClipsToGen,
+      generationMode: p.generationMode as any,
+      customInstructions: p.customInstructions,
       clipCount: p._count.clips,
       activeJobProgress: p.jobs[0]?.progressPercent ?? null,
       activeJobStage: (p.jobs[0]?.stage as unknown as JobStage) ?? null,
@@ -311,6 +317,8 @@ export class ProjectService {
         minClipDuration: input.minClipDuration,
         maxClipDuration: input.maxClipDuration,
         maxClipsToGen: input.maxClipsToGen,
+        generationMode: (input.generationMode as any) || "HIGHLIGHTS",
+        customInstructions: input.customInstructions || null,
         expiresAt,
       },
     });
@@ -326,6 +334,8 @@ export class ProjectService {
       minClipDuration: project.minClipDuration,
       maxClipDuration: project.maxClipDuration,
       maxClipsToGen: project.maxClipsToGen,
+      generationMode: project.generationMode as any,
+      customInstructions: project.customInstructions,
       clipCount: 0,
       activeJobProgress: null,
       activeJobStage: null,
@@ -404,6 +414,8 @@ export class ProjectService {
       minClipDuration: project.minClipDuration,
       maxClipDuration: project.maxClipDuration,
       maxClipsToGen: project.maxClipsToGen,
+      generationMode: project.generationMode as any,
+      customInstructions: project.customInstructions,
       clipCount: project.clips.length,
       activeJobProgress: latestJob ? latestJob.progressPercent : null,
       activeJobStage: latestJob ? (latestJob.stage as unknown as JobStage) : null,
@@ -623,6 +635,7 @@ export class ProjectService {
       projectId: c.projectId,
       projectTitle: c.project?.title,
       rankOrder: c.rankOrder,
+      partNumber: c.partNumber ?? null,
       title: c.title,
       description: c.description,
       category: c.category as unknown as ClipCategory,

@@ -352,6 +352,7 @@ class ClipScoringEngine:
         candidate: HighlightCandidate,
         video_duration: Optional[float] = None,
         custom_weights: Optional[Dict[str, float]] = None,
+        custom_instructions: Optional[str] = None,
     ) -> ScoredHighlightCandidate:
         """
         Evaluates a single candidate: applies quality gates, computes dimension scores,
@@ -368,6 +369,17 @@ class ClipScoringEngine:
             explanation = f"Rejected by Quality Gates: {'; '.join(rejection_reasons)}"
         else:
             overall_score = self.compute_overall_score(candidate, dim_scores, custom_weights)
+
+            # Boost score if candidate directly matches user custom instructions
+            if custom_instructions:
+                ci_words = set(re.findall(r"\w+", custom_instructions.lower()))
+                cand_text = f"{candidate.title} {candidate.summary} {candidate.hook} {candidate.category.value}".lower()
+                cand_words = set(re.findall(r"\w+", cand_text))
+                overlap = ci_words.intersection(cand_words)
+                meaningful_overlap = [w for w in overlap if len(w) > 3 and w not in {"with", "that", "this", "from", "have"}]
+                if meaningful_overlap:
+                    overall_score = min(98, overall_score + 10)
+
             if overall_score >= 85:
                 decision = ScoringDecision.APPROVED
                 explanation = "Excellent standalone highlight with compelling hook and complete context."
@@ -411,7 +423,12 @@ class ClipScoringEngine:
             weights_override = None
             if request.custom_weights and cand.category.value in request.custom_weights:
                 weights_override = request.custom_weights[cand.category.value]
-            scored = self.evaluate_candidate(cand, request.video_duration, weights_override)
+            scored = self.evaluate_candidate(
+                cand,
+                request.video_duration,
+                weights_override,
+                custom_instructions=request.custom_instructions,
+            )
             evaluated.append(scored)
 
         # Separate approved/review from hard rejected

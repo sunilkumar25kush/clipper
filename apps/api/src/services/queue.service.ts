@@ -21,6 +21,8 @@ export interface VideoProcessingJobData {
   minClipDuration?: number;
   maxClipDuration?: number;
   maxClipsToGen?: number;
+  generationMode?: string;
+  customInstructions?: string;
 }
 
 export class QueueService {

@@ -129,3 +129,4 @@ A degradation in any of these metrics halts the CI/test pipeline, preventing sil
 1. **Acoustic Energy & Laughter Pitch Modeling**: Complement Whisper lexical keywords with spectral audio pitch peak detection to elevate funny moment boundary precision.
 2. **Crowdsourced Review Interface**: Expose the `POST /api/v1/evaluation/review` endpoint via an internal web portal for continuous blind QA labeling by human editors.
 3. **Adaptive Duration Profiles**: Dynamically relax or tighten duration bounds based on speaking tempo (words per minute).
+

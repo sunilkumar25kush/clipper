@@ -43,6 +43,8 @@ export const createProjectSchema = z.object({
   rightsAttested: z.literal(true, {
     errorMap: () => ({ message: "You must attest rights to the video content" }),
   }),
+  generationMode: z.enum(["HIGHLIGHTS", "PARTS"]).default("HIGHLIGHTS"),
+  customInstructions: z.string().max(2000).optional().nullable(),
   targetAspect: z.enum(["RATIO_9_16", "RATIO_16_9", "RATIO_1_1"]).default("RATIO_9_16"),
   minClipDuration: z.number().int().min(10).max(120).default(15),
   maxClipDuration: z.number().int().min(15).max(180).default(60),
@@ -70,6 +72,8 @@ export const initiateUploadSchema = z.object({
     },
   ),
   title: z.string().min(1).max(255).optional(),
+  generationMode: z.enum(["HIGHLIGHTS", "PARTS"]).default("HIGHLIGHTS"),
+  customInstructions: z.string().max(2000).optional().nullable(),
   targetAspect: z.enum(["RATIO_9_16", "RATIO_16_9", "RATIO_1_1"]).default("RATIO_9_16"),
   minClipDuration: z.number().int().min(10).max(120).default(15),
   maxClipDuration: z.number().int().min(15).max(180).default(60),
@@ -92,6 +96,8 @@ export const completeUploadSchema = z.object({
 
 export const createProcessingJobSchema = z.object({
   projectId: z.string().uuid("Invalid projectId UUID"),
+  generationMode: z.enum(["HIGHLIGHTS", "PARTS"]).optional(),
+  customInstructions: z.string().max(2000).optional().nullable(),
   targetAspect: z.enum(["RATIO_9_16", "RATIO_16_9", "RATIO_1_1"]).optional(),
   minClipDuration: z.number().int().min(10).max(120).optional(),
   maxClipDuration: z.number().int().min(15).max(180).optional(),
@@ -108,6 +114,7 @@ export const clipCategorySchema = z.enum([
   "important",
   "interesting",
   "motivational",
+  "part",
   "storytelling",
   "emotional",
   "strong_opinions",

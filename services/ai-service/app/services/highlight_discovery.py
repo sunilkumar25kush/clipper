@@ -222,15 +222,19 @@ class HighlightDiscoveryEngine:
         max_dur: float,
         video_title: Optional[str] = None,
         target_categories: Optional[List[HighlightCategory]] = None,
+        custom_instructions: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Invokes Gemini with strict structured output for chunk highlight discovery."""
         client = self._get_genai_client()
         if not client:
             raise RuntimeError("Gemini client is unavailable")
 
+        instructions_block = f"\nUSER CUSTOM INSTRUCTIONS: \"{custom_instructions}\"\n(Strictly prioritize moments matching the user's explicit content requests.)\n" if custom_instructions else ""
+
         user_content = (
             f"Video Title: {video_title or 'Long-form Discussion'}\n"
-            f"Chunk Boundary: [{raw_chunk.start_time:.2f}s to {raw_chunk.end_time:.2f}s]\n\n"
+            f"Chunk Boundary: [{raw_chunk.start_time:.2f}s to {raw_chunk.end_time:.2f}s]\n"
+            f"{instructions_block}\n"
             f"Transcript Dialogue:\n{self._format_chunk_transcript(raw_chunk.segments)}\n\n"
             f"Discover high-value highlight moments with complete standalone context."
         )
@@ -261,6 +265,7 @@ class HighlightDiscoveryEngine:
         min_dur: float,
         max_dur: float,
         target_categories: Optional[List[HighlightCategory]] = None,
+        custom_instructions: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         High-precision rule-based semantic analyzer for highlight moments.
@@ -274,6 +279,36 @@ class HighlightDiscoveryEngine:
         # Determine category matches across the chunk text
         category_scores: Dict[HighlightCategory, int] = {cat: 0 for cat in HighlightCategory}
         category_matches: Dict[HighlightCategory, List[str]] = {cat: [] for cat in HighlightCategory}
+
+        # If user provided custom instructions, boost matching categories
+        if custom_instructions:
+            ci_lower = custom_instructions.lower()
+            alias_map = {
+                "business": HighlightCategory.IMPORTANT_INSIGHT,
+                "lesson": HighlightCategory.LIFE_LESSON,
+                "life": HighlightCategory.LIFE_LESSON,
+                "funny": HighlightCategory.FUNNY,
+                "humor": HighlightCategory.FUNNY,
+                "comedy": HighlightCategory.FUNNY,
+                "joke": HighlightCategory.FUNNY,
+                "motivation": HighlightCategory.MOTIVATIONAL,
+                "motivational": HighlightCategory.MOTIVATIONAL,
+                "discipline": HighlightCategory.MOTIVATIONAL,
+                "fact": HighlightCategory.INTERESTING_FACT,
+                "facts": HighlightCategory.INTERESTING_FACT,
+                "surprising": HighlightCategory.INTERESTING_FACT,
+                "education": HighlightCategory.EDUCATIONAL,
+                "educational": HighlightCategory.EDUCATIONAL,
+                "learn": HighlightCategory.EDUCATIONAL,
+                "tutorial": HighlightCategory.EDUCATIONAL,
+                "story": HighlightCategory.STORYTELLING,
+                "stories": HighlightCategory.STORYTELLING,
+                "debate": HighlightCategory.STRONG_OPINION,
+                "opinion": HighlightCategory.STRONG_OPINION,
+            }
+            for kw, cat in alias_map.items():
+                if kw in ci_lower:
+                    category_scores[cat] += 8
 
         for seg in segments:
             for cat, patterns in CATEGORY_PATTERNS.items():
@@ -427,6 +462,7 @@ class HighlightDiscoveryEngine:
                         max_dur=request.max_duration,
                         video_title=request.video_title,
                         target_categories=request.target_categories,
+                        custom_instructions=request.custom_instructions,
                     )
                 except Exception as e:
                     logger.warning(f"Live Gemini highlight discovery failed for {chunk.chunk_id}, using heuristic: {e}")
@@ -435,6 +471,7 @@ class HighlightDiscoveryEngine:
                         min_dur=request.min_duration,
                         max_dur=request.max_duration,
                         target_categories=request.target_categories,
+                        custom_instructions=request.custom_instructions,
                     )
             else:
                 chunk_raw_candidates = self._discover_candidates_heuristic(
@@ -442,6 +479,7 @@ class HighlightDiscoveryEngine:
                     min_dur=request.min_duration,
                     max_dur=request.max_duration,
                     target_categories=request.target_categories,
+                    custom_instructions=request.custom_instructions,
                 )
 
             # 4. Snap boundaries, verify evidence, enforce standalone context
