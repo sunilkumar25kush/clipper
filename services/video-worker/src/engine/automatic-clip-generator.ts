@@ -10,7 +10,7 @@ import {
 import { prisma } from "@clipforge/database";
 import { workerConfig } from "../config/env.js";
 import { segmentExtractor } from "./segment-extractor.js";
-import { videoCropper } from "./video-cropper.js";
+import { videoCropper, getTargetDimensions } from "./video-cropper.js";
 import {
   subtitleBurner,
   AssWordToken,
@@ -19,6 +19,8 @@ import {
 } from "./subtitle-burner.js";
 import { thumbnailGenerator } from "./thumbnail-generator.js";
 import { metadataExtractor } from "./metadata-extractor.js";
+import { executeProcess } from "./ffmpeg-process.js";
+import { secondsToFfmpegTimestamp } from "../utils/time-formatter.js";
 import { tempManager } from "../utils/temp-manager.js";
 import { storageUploader } from "../utils/storage-uploader.js";
 
@@ -117,6 +119,9 @@ export class AutomaticClipGenerator {
     const totalClips = candidates.length;
     let completedCount = 0;
 
+    // Extract source metadata once for all candidate clips to eliminate repeated ffprobe overhead
+    const sourceMeta = await metadataExtractor.extract(sourceVideoPath);
+
     // Simple bounded concurrency runner
     const queue = [...candidates.map((cand, idx) => ({ cand, rankOrder: idx + 1 }))];
 
@@ -132,6 +137,7 @@ export class AutomaticClipGenerator {
           rankOrder,
           candidate: cand,
           sourceVideoPath,
+          sourceMeta,
           transcriptWords,
           targetAspect,
           cropMode,
@@ -170,6 +176,7 @@ export class AutomaticClipGenerator {
     rankOrder: number;
     candidate: ClipCandidateInput;
     sourceVideoPath: string;
+    sourceMeta?: VideoMetadata;
     transcriptWords: AssWordToken[];
     targetAspect: AspectRatio;
     cropMode: CropMode;
@@ -191,6 +198,7 @@ export class AutomaticClipGenerator {
     } = params;
 
     const clipDuration = Math.max(0.5, candidate.end - candidate.start);
+    const sourceMeta = params.sourceMeta || (await metadataExtractor.extract(sourceVideoPath));
 
     // Filter and offset words to be relative to the clip start
     const relativeWords: AssWordToken[] = transcriptWords
@@ -202,29 +210,16 @@ export class AutomaticClipGenerator {
         probability: w.probability,
       }));
 
+    const captionsJson: object = { words: relativeWords };
+
     return tempManager.withTempDir(async (scratchDir) => {
-      // 1. Cut segment from source
-      const cutVideoPath = path.join(scratchDir, "cut_raw.mp4");
-      await segmentExtractor.extractSegment(sourceVideoPath, cutVideoPath, {
-        startTimeSeconds: candidate.start,
-        endTimeSeconds: candidate.end,
-        accurate: true, // re-encode to guarantee exact keyframe cut
-      });
+      let finalRenderedVideoPath = path.join(scratchDir, "rendered_fast.mp4");
+      let renderSucceeded = false;
 
-      // 2. Reframe aspect ratio (9:16, 16:9, 1:1) with speaker-aware or center crop
-      const reframedVideoPath = path.join(scratchDir, "reframed.mp4");
-      await videoCropper.reframeVideo(cutVideoPath, reframedVideoPath, {
-        targetAspect,
-        mode: cropMode,
-        focusXNormalized: candidate.focusXNormalized ?? 0.5,
-      });
-
-      // 3. Generate dynamic word-level highlighted ASS subtitle file
-      let finalRenderedVideoPath = reframedVideoPath;
-      const captionsJson: object = { words: relativeWords };
-
+      // 1. Prepare ASS subtitle file if words exist
+      let assPath: string | null = null;
       if (relativeWords.length > 0) {
-        const assPath = path.join(scratchDir, "subtitles.ass");
+        assPath = path.join(scratchDir, "subtitles.ass");
         subtitleBurner.generateWordHighlightAssFile(assPath, relativeWords, {
           fontFamily: params.fontFamily || "Arial",
           fontSize: params.fontSize || (targetAspect === AspectRatio.RATIO_9_16 ? 26 : 22),
@@ -232,13 +227,135 @@ export class AutomaticClipGenerator {
           position: captionPosition,
           wordsPerLine: 3,
         });
+      }
 
-        // 4. Burn subtitles into video
-        const subtitledVideoPath = path.join(scratchDir, "subtitled.mp4");
-        await subtitleBurner.burnSubtitles(reframedVideoPath, subtitledVideoPath, {
-          subtitlePath: assPath,
+      // 2. ULTRAFAST SINGLE-PASS DIRECT RENDER
+      // Cuts, reframes (9:16/16:9/1:1), burns word subtitles, and encodes in ONE step!
+      try {
+        const targetDim = getTargetDimensions(targetAspect);
+        const { width: outW, height: outH } = targetDim;
+        const inW = sourceMeta.width;
+        const inH = sourceMeta.height;
+
+        let videoFilter = "";
+        let isComplexFilter = false;
+
+        const normalizedSubPath = assPath && fs.existsSync(assPath)
+          ? path.resolve(assPath).replace(/\\/g, "/").replace(/^([A-Za-z]):/, "$1\\:")
+          : null;
+
+        if (cropMode === CropMode.BLUR_PAD) {
+          isComplexFilter = true;
+          let filterGraph = `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},boxblur=10:2[bg];[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+          if (normalizedSubPath) {
+            filterGraph += `[v];[v]ass='${normalizedSubPath}'`;
+          }
+          videoFilter = filterGraph;
+        } else {
+          // Center crop or speaker-aware focus crop
+          const targetRatio = outW / outH;
+          const inputRatio = inW / inH;
+
+          let cropW = inW;
+          let cropH = inH;
+
+          if (inputRatio > targetRatio) {
+            cropW = Math.round(inH * targetRatio);
+            if (cropW % 2 !== 0) cropW -= 1;
+          } else {
+            cropH = Math.round(inW / targetRatio);
+            if (cropH % 2 !== 0) cropH -= 1;
+          }
+
+          let cropX = Math.round((inW - cropW) / 2);
+          if (typeof candidate.focusXNormalized === "number" && !isNaN(candidate.focusXNormalized)) {
+            const desiredCenterX = inW * Math.max(0.0, Math.min(1.0, candidate.focusXNormalized));
+            cropX = Math.round(desiredCenterX - cropW / 2);
+            cropX = Math.max(0, Math.min(inW - cropW, cropX));
+            if (cropX % 2 !== 0) cropX -= 1;
+            cropX = Math.max(0, cropX);
+          }
+          const cropY = Math.round((inH - cropH) / 2);
+
+          videoFilter = `crop=${cropW}:${cropH}:${cropX}:${cropY},scale=${outW}:${outH}`;
+          if (normalizedSubPath) {
+            videoFilter += `,ass='${normalizedSubPath}'`;
+          }
+        }
+
+        const startTs = secondsToFfmpegTimestamp(candidate.start);
+        const durationSeconds = Math.max(0.5, candidate.end - candidate.start);
+
+        const args = [
+          "-y",
+          "-ss", startTs,
+          "-t", durationSeconds.toFixed(3),
+          "-i", sourceVideoPath,
+        ];
+
+        if (isComplexFilter) {
+          args.push("-filter_complex", videoFilter);
+        } else {
+          args.push("-vf", videoFilter);
+        }
+
+        args.push(
+          "-c:v", "libx264",
+          "-preset", workerConfig.defaultPreset,
+          "-crf", workerConfig.defaultCrf.toString(),
+          "-pix_fmt", "yuv420p"
+        );
+
+        if (sourceMeta.hasAudio) {
+          args.push("-c:a", "aac", "-b:a", `${workerConfig.defaultAudioBitrateKbps}k`);
+        } else {
+          args.push("-an");
+        }
+
+        args.push(
+          "-movflags", "+faststart",
+          "-threads", workerConfig.maxThreads.toString(),
+          finalRenderedVideoPath
+        );
+
+        await executeProcess(workerConfig.ffmpegPath, args);
+
+        if (fs.existsSync(finalRenderedVideoPath) && fs.statSync(finalRenderedVideoPath).size > 0) {
+          renderSucceeded = true;
+        }
+      } catch (fastRenderErr) {
+        console.warn("[AutomaticClipGenerator] Direct single-pass render failed, falling back to multi-step:", fastRenderErr);
+      }
+
+      // 3. Fallback to multi-step if single-pass wasn't successful
+      if (!renderSucceeded) {
+        const cutVideoPath = path.join(scratchDir, "cut_raw.mp4");
+        await segmentExtractor.extractSegment(sourceVideoPath, cutVideoPath, {
+          startTimeSeconds: candidate.start,
+          endTimeSeconds: candidate.end,
+          accurate: true,
+          preset: workerConfig.defaultPreset,
+          crf: workerConfig.defaultCrf,
         });
-        finalRenderedVideoPath = subtitledVideoPath;
+
+        const reframedVideoPath = path.join(scratchDir, "reframed.mp4");
+        await videoCropper.reframeVideo(cutVideoPath, reframedVideoPath, {
+          targetAspect,
+          mode: cropMode,
+          focusXNormalized: candidate.focusXNormalized ?? 0.5,
+          preset: workerConfig.defaultPreset,
+          crf: workerConfig.defaultCrf,
+        });
+
+        finalRenderedVideoPath = reframedVideoPath;
+
+        if (assPath && fs.existsSync(assPath)) {
+          const subtitledVideoPath = path.join(scratchDir, "subtitled.mp4");
+          await subtitleBurner.burnSubtitles(reframedVideoPath, subtitledVideoPath, {
+            subtitlePath: assPath,
+          });
+          finalRenderedVideoPath = subtitledVideoPath;
+        }
       }
 
       // 5. Generate high-quality thumbnail frame
@@ -345,7 +462,7 @@ export class AutomaticClipGenerator {
             status: "READY",
           },
         });
-      });
+      }, { maxWait: 10000, timeout: 30000 });
 
       return {
         clipId,

@@ -32,7 +32,6 @@ export class SegmentExtractor {
     }
 
     const startTs = secondsToFfmpegTimestamp(options.startTimeSeconds);
-    const endTs = secondsToFfmpegTimestamp(options.endTimeSeconds);
     const segmentDuration = options.endTimeSeconds - options.startTimeSeconds;
 
     const accurate = options.accurate !== false; // default true for frame accuracy
@@ -46,8 +45,8 @@ export class SegmentExtractor {
       args.push(
         "-ss",
         startTs,
-        "-to",
-        endTs,
+        "-t",
+        segmentDuration.toFixed(3),
         "-i",
         inputVideoPath,
         "-c:v",
@@ -70,7 +69,7 @@ export class SegmentExtractor {
       args.push("-movflags", "+faststart");
     } else {
       // Fast stream copy (zero re-encoding, snaps to nearest keyframe)
-      args.push("-ss", startTs, "-to", endTs, "-i", inputVideoPath, "-c", "copy");
+      args.push("-ss", startTs, "-t", segmentDuration.toFixed(3), "-i", inputVideoPath, "-c", "copy");
     }
 
     args.push("-threads", workerConfig.maxThreads.toString(), outputVideoPath);

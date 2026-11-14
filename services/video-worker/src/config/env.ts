@@ -34,10 +34,10 @@ export const workerConfig = {
   ffmpegPath: resolvedFfmpegPath,
   ffprobePath: resolvedFfprobePath,
   tempDir: process.env.WORKER_TEMP_DIR || path.join(os.tmpdir(), "clipforge"),
-  maxConcurrentRenders: Number(process.env.WORKER_CONCURRENCY || 2),
-  defaultPreset: process.env.FFMPEG_PRESET || "veryfast",
-  defaultCrf: Number(process.env.FFMPEG_CRF || 20),
-  defaultAudioBitrateKbps: Number(process.env.FFMPEG_AUDIO_BITRATE_KBPS || 192),
-  processTimeoutMs: Number(process.env.FFMPEG_TIMEOUT_MS || 300_000), // 5 minutes max
-  maxThreads: Math.max(1, Math.min(4, (os.cpus()?.length || 2) - 1)),
+  maxConcurrentRenders: Number(process.env.WORKER_CONCURRENCY || 3),
+  defaultPreset: process.env.FFMPEG_PRESET || "ultrafast",
+  defaultCrf: Number(process.env.FFMPEG_CRF || 23),
+  defaultAudioBitrateKbps: Number(process.env.FFMPEG_AUDIO_BITRATE_KBPS || 160),
+  processTimeoutMs: Number(process.env.FFMPEG_TIMEOUT_MS || 900_000), // 15 minutes max per process
+  maxThreads: Math.max(2, Math.min(8, (os.cpus()?.length || 4))),
 };

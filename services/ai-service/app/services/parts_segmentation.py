@@ -110,13 +110,25 @@ class PartsSegmentationEngine:
         else:
             refined_cuts.append(round(video_duration, 2))
 
+        # Ensure no individual part exceeds target_max_duration (subdivide large sections)
+        final_cuts: List[float] = [refined_cuts[0]]
+        for pt in refined_cuts[1:]:
+            curr_start = final_cuts[-1]
+            diff = pt - curr_start
+            if diff > target_max_duration:
+                num_sub = math.ceil(diff / target_max_duration)
+                sub_step = diff / num_sub
+                for s in range(1, num_sub):
+                    final_cuts.append(round(curr_start + s * sub_step, 2))
+            final_cuts.append(pt)
+
         # 3. Generate Sequential Part Metadata
         parts_output: List[PipelineClipOutput] = []
         clean_vtitle = video_title.strip() if video_title else ""
 
-        for idx in range(len(refined_cuts) - 1):
-            p_start = refined_cuts[idx]
-            p_end = refined_cuts[idx + 1]
+        for idx in range(len(final_cuts) - 1):
+            p_start = final_cuts[idx]
+            p_end = final_cuts[idx + 1]
             p_num = idx + 1
             duration = round(p_end - p_start, 2)
 
