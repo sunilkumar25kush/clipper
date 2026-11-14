@@ -516,19 +516,39 @@ export class JobService {
             }
           } else {
             // Use yt-dlp to download from YouTube, Vimeo, Loom, TikTok, etc.
+            const ffmpegDir = path.dirname(workerConfig.ffmpegPath);
             await executeProcess("python", [
               "-m", "yt_dlp",
-              "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+              "--ffmpeg-location", ffmpegDir,
+              "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+              "--merge-output-format", "mp4",
               "--no-playlist",
               "--max-filesize", "250M",
+              "--force-overwrites",
               "-o", urlLocalPath,
               project.sourceUrl,
             ]);
           }
 
-          if (fs.existsSync(urlLocalPath) && fs.statSync(urlLocalPath).size > 0) {
-            localSourcePath = urlLocalPath;
-            const meta = await metadataExtractor.extract(urlLocalPath).catch(() => null);
+          let resolvedPath = urlLocalPath;
+          if (!fs.existsSync(resolvedPath)) {
+            const possibleVariants = [
+              urlLocalPath + ".mp4",
+              urlLocalPath.replace(/\.mp4$/, "") + ".mkv",
+              urlLocalPath.replace(/\.mp4$/, "") + ".webm",
+            ];
+            for (const v of possibleVariants) {
+              if (fs.existsSync(v) && fs.statSync(v).size > 0) {
+                fs.copyFileSync(v, urlLocalPath);
+                resolvedPath = urlLocalPath;
+                break;
+              }
+            }
+          }
+
+          if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).size > 0) {
+            localSourcePath = resolvedPath;
+            const meta = await metadataExtractor.extract(resolvedPath).catch(() => null);
 
             sourceAsset = await prisma.videoAsset.create({
               data: {
@@ -537,7 +557,7 @@ export class JobService {
                 storageBucket: "local",
                 storageKey: urlStorageKey,
                 mimeType: "video/mp4",
-                fileSizeBytes: fs.statSync(urlLocalPath).size,
+                fileSizeBytes: fs.statSync(resolvedPath).size,
                 durationSeconds: meta?.durationSeconds || 60,
                 width: meta?.width || 1280,
                 height: meta?.height || 720,
@@ -547,7 +567,7 @@ export class JobService {
                 status: "READY",
               },
             });
-            console.log(`[JobService] Successfully downloaded and registered source asset for project ${projectId}`);
+            console.log(`[JobService] Successfully downloaded and registered source asset for project ${projectId} (${fs.statSync(resolvedPath).size} bytes)`);
           }
         } catch (downloadErr) {
           console.warn(`[JobService] Failed to download video from URL ${project.sourceUrl}:`, downloadErr);
