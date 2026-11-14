@@ -517,17 +517,33 @@ export class JobService {
           } else {
             // Use yt-dlp to download from YouTube, Vimeo, Loom, TikTok, etc.
             const ffmpegDir = path.dirname(workerConfig.ffmpegPath);
-            await executeProcess("python", [
-              "-m", "yt_dlp",
-              "--ffmpeg-location", ffmpegDir,
-              "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-              "--merge-output-format", "mp4",
-              "--no-playlist",
-              "--max-filesize", "250M",
-              "--force-overwrites",
-              "-o", urlLocalPath,
-              project.sourceUrl,
-            ]);
+            try {
+              await executeProcess("python", [
+                "-m", "yt_dlp",
+                "--ffmpeg-location", ffmpegDir,
+                "-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best[height<=1080]/best[height<=720]/best",
+                "--merge-output-format", "mp4",
+                "--no-playlist",
+                "--max-filesize", "2G",
+                "--socket-timeout", "30",
+                "--retries", "5",
+                "--force-overwrites",
+                "-o", urlLocalPath,
+                project.sourceUrl,
+              ]);
+            } catch (ytErr) {
+              console.warn(`[JobService] Primary yt-dlp download failed, retrying with fallback format:`, ytErr);
+              await executeProcess("python", [
+                "-m", "yt_dlp",
+                "--ffmpeg-location", ffmpegDir,
+                "-f", "best[height<=720]/best",
+                "--merge-output-format", "mp4",
+                "--no-playlist",
+                "--force-overwrites",
+                "-o", urlLocalPath,
+                project.sourceUrl,
+              ]);
+            }
           }
 
           let resolvedPath = urlLocalPath;
@@ -568,14 +584,23 @@ export class JobService {
               },
             });
             console.log(`[JobService] Successfully downloaded and registered source asset for project ${projectId} (${fs.statSync(resolvedPath).size} bytes)`);
+          } else if (project.sourceUrl) {
+            throw new Error(`Failed to locate downloaded video file from URL ${project.sourceUrl}`);
           }
         } catch (downloadErr) {
-          console.warn(`[JobService] Failed to download video from URL ${project.sourceUrl}:`, downloadErr);
+          console.error(`[JobService] Failed to download video from URL ${project.sourceUrl}:`, downloadErr);
+          if (project.sourceUrl) {
+            throw new Error(`Unable to download video from ${project.sourceUrl}. Please verify the video is publicly accessible and not restricted.`);
+          }
         }
       }
 
-      // If still no local file on disk, create a high-quality 30s demo video with gentle audio
+      // If still no local file on disk, create a high-quality 30s demo video without any beep sound
       if (!localSourcePath || !fs.existsSync(localSourcePath)) {
+        if (project.sourceUrl) {
+          throw new Error(`Source video not available for URL ${project.sourceUrl}`);
+        }
+
         const demoStorageKey = `users/${userId}/projects/${projectId}/demo_source_1080p.mp4`;
         const demoLocalPath = path.join(uploadsDir, demoStorageKey);
         const demoDir = path.dirname(demoLocalPath);
@@ -590,12 +615,11 @@ export class JobService {
             "-f", "lavfi",
             "-i", "color=c=0x18181b:size=1280x720:duration=30:rate=30",
             "-f", "lavfi",
-            "-i", "sine=frequency=440:duration=30",
+            "-i", "aevalsrc=0:d=30",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
-            "-af", "volume=0.15",
             "-t", "30",
             demoLocalPath,
           ]);
