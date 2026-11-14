@@ -319,6 +319,39 @@ export default function ProjectWorkspacePage() {
         </div>
       )}
 
+      {/* Failure Alert Banner (if failed) */}
+      {project.status === ProjectStatus.FAILED && (
+        <div className="rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50/80 dark:bg-red-950/30 p-4 space-y-2">
+          <div className="flex items-start gap-3">
+            <WarningCircle weight="fill" className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <h3 className="text-sm font-semibold text-red-900 dark:text-red-200">
+                Processing Encountered an Issue
+              </h3>
+              <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">
+                {project.jobs?.[0]?.errorMessage ||
+                  "The video source could not be downloaded. Please verify the URL is public or re-trigger generation."}
+              </p>
+              <div className="pt-2 flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleStartClipping}
+                  disabled={isStartingJob}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900 dark:bg-red-800 text-white text-xs font-semibold hover:bg-red-800 active:scale-95 transition-all shadow-xs disabled:opacity-50"
+                >
+                  {isStartingJob ? (
+                    <CircleNotch size={13} className="animate-spin" />
+                  ) : (
+                    <Play size={12} weight="fill" />
+                  )}
+                  <span>Retry AI Generation</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search, Filter and Sorting Controls */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
