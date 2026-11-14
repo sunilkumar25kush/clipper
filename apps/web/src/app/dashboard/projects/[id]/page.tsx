@@ -53,7 +53,9 @@ export default function ProjectWorkspacePage() {
           targetAspect: project?.targetAspect,
           minClipDuration: project?.minClipDuration || 15,
           maxClipDuration: project?.maxClipDuration || 60,
-          maxClipsToGen: 10,
+          maxClipsToGen: project?.maxClipsToGen || 10,
+          generationMode: project?.generationMode || "HIGHLIGHTS",
+          customInstructions: project?.customInstructions || undefined,
         }),
       });
       setProject((prev) =>
@@ -252,6 +254,8 @@ export default function ProjectWorkspacePage() {
                 className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
                   project.status === ProjectStatus.COMPLETED
                     ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40"
+                    : project.status === ProjectStatus.FAILED
+                    ? "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40"
                     : isProcessing
                     ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/40"
                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
@@ -270,7 +274,7 @@ export default function ProjectWorkspacePage() {
             </div>
           </div>
 
-          {project.status !== ProjectStatus.COMPLETED && !isProcessing && (
+          {!isProcessing && (
             <button
               type="button"
               onClick={handleStartClipping}
@@ -282,7 +286,7 @@ export default function ProjectWorkspacePage() {
               ) : (
                 <Play size={13} weight="fill" />
               )}
-              <span>Generate AI Clips</span>
+              <span>{clips.length > 0 ? "Re-generate Clips" : "Generate AI Clips"}</span>
             </button>
           )}
         </div>

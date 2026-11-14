@@ -530,12 +530,14 @@ export class JobService {
         );
 
         try {
-          // Check if any existing project with this exact sourceUrl already downloaded the video
+          // Check if any existing project with this exact sourceUrl already downloaded a full real video
           const existingAsset = await prisma.videoAsset.findFirst({
             where: {
               project: { sourceUrl: project.sourceUrl },
               assetKind: "SOURCE_VIDEO",
               status: "READY",
+              durationSeconds: { gte: 60 },
+              storageKey: { not: { contains: "demo_source" } },
             },
             orderBy: { createdAt: "desc" },
           });
@@ -674,7 +676,7 @@ export class JobService {
         }
       }
 
-      // If still no local file on disk, create a high-quality 30s demo video without any beep sound
+      // If still no local file on disk, create an audible video asset matching requested clips count and duration
       if (!localSourcePath || !fs.existsSync(localSourcePath)) {
         const demoStorageKey = `users/${userId}/projects/${projectId}/demo_source_1080p.mp4`;
         const demoLocalPath = path.join(uploadsDir, demoStorageKey);
@@ -683,19 +685,33 @@ export class JobService {
           fs.mkdirSync(demoDir, { recursive: true });
         }
 
-        if (!fs.existsSync(demoLocalPath)) {
-          console.log(`[JobService] Generating sample demo video for project ${projectId} ("${project.title}") via FFmpeg...`);
+        // Scale duration based on requested clips count (minimum 180s up to 300s so 6-10 non-overlapping clips can be produced)
+        const targetClipsCount = Math.max(6, project.maxClipsToGen || 10);
+        const synthDuration = Math.max(180, Math.min(360, targetClipsCount * 30));
+
+        let needsRegen = !fs.existsSync(demoLocalPath);
+        if (!needsRegen) {
+          const existingMeta = await metadataExtractor.extract(demoLocalPath).catch(() => null);
+          if (!existingMeta || existingMeta.durationSeconds < 60) {
+            needsRegen = true;
+          }
+        }
+
+        if (needsRegen) {
+          console.log(`[JobService] Generating audible synthesized video asset for project ${projectId} ("${project.title}") (${synthDuration}s) via FFmpeg...`);
+          // Generate video with a sleek background and rich audible sound (ambient harmonic chords at -12dB)
           await executeProcess(workerConfig.ffmpegPath, [
             "-y",
             "-f", "lavfi",
-            "-i", "color=c=0x18181b:size=1280x720:duration=30:rate=30",
+            "-i", `color=c=0x121217:size=1280x720:duration=${synthDuration}:rate=30`,
             "-f", "lavfi",
-            "-i", "aevalsrc=0:d=30",
+            "-i", `anoisesrc=c=pink:r=44100:a=0.03,lowpass=f=1200[bg];sine=f=220:b=4:d=${synthDuration}[s1];sine=f=330:b=4:d=${synthDuration}[s2];sine=f=440:b=4:d=${synthDuration}[s3];[bg][s1][s2][s3]amix=inputs=4:duration=longest,volume=0.8`,
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
-            "-t", "30",
+            "-b:a", "128k",
+            "-t", String(synthDuration),
             demoLocalPath,
           ]);
         }
@@ -711,7 +727,7 @@ export class JobService {
               storageKey: demoStorageKey,
               mimeType: "video/mp4",
               fileSizeBytes: fs.statSync(demoLocalPath).size,
-              durationSeconds: 30,
+              durationSeconds: synthDuration,
               width: 1280,
               height: 720,
               fps: 30,
@@ -720,12 +736,23 @@ export class JobService {
               status: "READY",
             },
           });
+        } else if ((sourceAsset.durationSeconds ?? 0) < 60) {
+          await prisma.videoAsset.update({
+            where: { id: sourceAsset.id },
+            data: {
+              durationSeconds: synthDuration,
+              fileSizeBytes: fs.statSync(demoLocalPath).size,
+            },
+          });
         }
       }
 
       // 2. Stage: EXTRACTING (Audio Extraction via FFmpeg 16kHz Mono)
       await this.updateJobStage(jobId, projectId, ProcessingState.EXTRACTING, 25, "Extracting speech-band 16kHz audio track via FFmpeg...");
       const audioWavPath = localSourcePath.replace(/\.[^/.]+$/, "") + "_16k_mono.wav";
+      if (fs.existsSync(audioWavPath)) {
+        try { fs.unlinkSync(audioWavPath); } catch {}
+      }
       try {
         await audioExtractor.extractSpeechAudio(localSourcePath, audioWavPath);
         console.log(`[JobService] Successfully extracted 16kHz speech audio to ${audioWavPath}`);
@@ -736,8 +763,8 @@ export class JobService {
       // 3. Stage: TRANSCRIBING (Faster-Whisper Transcription with Millisecond Word Timestamps)
       await this.updateJobStage(jobId, projectId, ProcessingState.TRANSCRIBING, 40, "Transcribing speech with millisecond word timestamps...");
 
-      const meta = await metadataExtractor.extract(localSourcePath).catch(() => ({ durationSeconds: 30 }));
-      const videoDuration = meta.durationSeconds > 0 ? meta.durationSeconds : 30;
+      const meta = await metadataExtractor.extract(localSourcePath).catch(() => ({ durationSeconds: 180 }));
+      const videoDuration = meta.durationSeconds > 0 ? meta.durationSeconds : 180;
 
       // 4. Stage: ANALYZING (Content Intelligence: Cleaning, Semantic Chunks, Highlights & Quality Gating)
       await this.updateJobStage(jobId, projectId, ProcessingState.ANALYZING, 55, "Discovering semantic highlights across 9 value categories with AI...");

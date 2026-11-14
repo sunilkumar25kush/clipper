@@ -42,8 +42,8 @@ export class GeminiService {
 
   constructor() {
     this.apiKey = process.env.GEMINI_API_KEY || "";
-    this.primaryModel = process.env.GEMINI_PRIMARY_MODEL || "gemini-3.5-flash-lite";
-    this.fallbackModel = "gemini-3.5-flash";
+    this.primaryModel = process.env.GEMINI_PRIMARY_MODEL || "gemini-3.8-flash";
+    this.fallbackModel = "gemini-3.8-flash";
   }
 
   /**
@@ -262,6 +262,62 @@ Respond strictly with valid JSON matching this schema:
         hook: 91,
         eng: 94,
         subtitle: `${videoTitle}: The surprising reveal that changed everything.`,
+      },
+      {
+        suffix: "Hilarious School Shenanigans",
+        category: "FUNNY",
+        reason: "Pure comedic timing and viral entertainment value.",
+        hook: 94,
+        eng: 96,
+        subtitle: `${videoTitle}: Nobody in the room expected this hilarious reaction.`,
+      },
+      {
+        suffix: "The Unfiltered Truth",
+        category: "INSIGHT",
+        reason: "Raw authenticity that drives deep viewer retention and shares.",
+        hook: 90,
+        eng: 92,
+        subtitle: `${videoTitle}: The honest reality behind what really happened.`,
+      },
+      {
+        suffix: "Intense Classroom Discussion",
+        category: "DISCUSSION",
+        reason: "Polarizing debate moment sparking comments and engagement.",
+        hook: 88,
+        eng: 91,
+        subtitle: `${videoTitle}: The intense argument everyone has an opinion on.`,
+      },
+      {
+        suffix: "Masterclass in Timing",
+        category: "STORYTELLING",
+        reason: "Compelling narrative pacing with immediate curiosity loop.",
+        hook: 92,
+        eng: 93,
+        subtitle: `${videoTitle}: How one split-second decision flipped the entire situation.`,
+      },
+      {
+        suffix: "Ultimate Golden Nugget",
+        category: "EDUCATIONAL",
+        reason: "High information density moment worth saving and rewatching.",
+        hook: 93,
+        eng: 95,
+        subtitle: `${videoTitle}: The key rule that explains why this worked.`,
+      },
+      {
+        suffix: "The Shocking Turn of Events",
+        category: "EMOTIONAL",
+        reason: "Shock factor and emotional peak maintaining maximum retention.",
+        hook: 96,
+        eng: 95,
+        subtitle: `${videoTitle}: Watch till the very end to see the full outcome.`,
+      },
+      {
+        suffix: "Final Epic Takeaway",
+        category: "MOTIVATIONAL",
+        reason: "Memorable conclusion and strong psychological closure.",
+        hook: 90,
+        eng: 93,
+        subtitle: `${videoTitle}: The ultimate lesson learned from this experience.`,
       },
     ];
 
