@@ -27,6 +27,13 @@ from app.schemas.highlight import (
     HighlightDiscoveryRequest,
     HighlightDiscoveryResponse,
 )
+from app.schemas.scoring import (
+    ScoringDecision,
+    CandidateScores,
+    ScoredHighlightCandidate,
+    ScoringRankingRequest,
+    ScoringRankingResponse,
+)
 
 __all__ = [
     "WordTimestamp",
@@ -49,5 +56,10 @@ __all__ = [
     "HighlightCandidate",
     "HighlightDiscoveryRequest",
     "HighlightDiscoveryResponse",
+    "ScoringDecision",
+    "CandidateScores",
+    "ScoredHighlightCandidate",
+    "ScoringRankingRequest",
+    "ScoringRankingResponse",
 ]
 

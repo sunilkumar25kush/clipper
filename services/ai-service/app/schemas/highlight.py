@@ -132,3 +132,4 @@ class HighlightDiscoveryResponse(BaseModel):
     categories_found: Dict[str, int] = Field(default_factory=dict)
     candidates: List[HighlightCandidate] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+

@@ -76,3 +76,4 @@ async def get_highlight_categories():
         HighlightCategory.STORYTELLING.value: "Personal stories with a clear narrative arc (setup, tension/conflict, unexpected twist, payoff/conclusion).",
         HighlightCategory.STRONG_OPINION.value: "Bold contrarian viewpoints, spicy takes, intellectual disagreements, thought-provoking debates.",
     }
+

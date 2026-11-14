@@ -1,3 +1,3 @@
-from app.routers import transcription, clip_detection, intelligence, highlight
+from app.routers import transcription, clip_detection, intelligence, highlight, scoring
 
-__all__ = ["transcription", "clip_detection", "intelligence", "highlight"]
+__all__ = ["transcription", "clip_detection", "intelligence", "highlight", "scoring"]

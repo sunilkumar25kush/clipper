@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import transcription, clip_detection, intelligence, highlight
+from app.routers import transcription, clip_detection, intelligence, highlight, scoring
 from app.services.model_manager import model_manager
 
 logging.basicConfig(
@@ -39,6 +39,7 @@ app.include_router(transcription.router)
 app.include_router(clip_detection.router)
 app.include_router(intelligence.router)
 app.include_router(highlight.router)
+app.include_router(scoring.router)
 
 @app.get("/health", tags=["System"])
 def health_check():
