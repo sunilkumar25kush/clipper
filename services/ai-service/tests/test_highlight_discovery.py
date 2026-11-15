@@ -1,5 +1,5 @@
 import pytest
-from typing import List
+from typing import List, Optional
 from fastapi.testclient import TestClient
 from app.main import app
 from app.schemas.transcript import TranscriptResponse, TranscriptSegment, WordTimestamp

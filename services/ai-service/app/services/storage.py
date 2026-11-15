@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import logging
 from datetime import datetime, timezone
@@ -17,7 +18,11 @@ class TranscriptStorage:
         os.makedirs(self.storage_dir, exist_ok=True)
 
     def _get_file_path(self, transcript_id: str) -> str:
-        return os.path.join(self.storage_dir, f"{transcript_id}.json")
+        safe_id = re.sub(r"[^\w\-.]", "_", os.path.basename(transcript_id))
+        path = os.path.abspath(os.path.join(self.storage_dir, f"{safe_id}.json"))
+        if not path.startswith(self.storage_dir):
+            raise ValueError(f"Path traversal detected: {transcript_id}")
+        return path
 
     def save_transcript(self, transcript: TranscriptResponse) -> str:
         """Saves transcript response to JSON file."""
@@ -96,7 +101,11 @@ class CandidateStorage:
         os.makedirs(self.storage_dir, exist_ok=True)
 
     def _get_file_path(self, project_id: str) -> str:
-        return os.path.join(self.storage_dir, f"{project_id}.json")
+        safe_id = re.sub(r"[^\w\-.]", "_", os.path.basename(project_id))
+        path = os.path.abspath(os.path.join(self.storage_dir, f"{safe_id}.json"))
+        if not path.startswith(self.storage_dir):
+            raise ValueError(f"Path traversal detected: {project_id}")
+        return path
 
     def save_candidates(self, project_id: str, candidates: list) -> str:
         """Saves discovered highlight candidates to disk as JSON."""

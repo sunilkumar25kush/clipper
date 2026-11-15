@@ -96,9 +96,8 @@ class HighlightCandidate(BaseModel):
     def validate_bounds_and_compute_duration(self) -> "HighlightCandidate":
         if self.end_time <= self.start_time:
             raise ValueError(f"end_time ({self.end_time}) must be strictly greater than start_time ({self.start_time})")
-        computed = round(self.end_time - self.start_time, 2)
-        if self.duration is None:
-            self.duration = computed
+        # Always enforce duration computed strictly from end_time - start_time to prevent bypassing quality gates
+        self.duration = round(self.end_time - self.start_time, 2)
         return self
 
 class HighlightDiscoveryRequest(BaseModel):

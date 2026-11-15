@@ -11,8 +11,12 @@
 
 A comprehensive architectural and code-level investigation was conducted across the ClipForge AI monorepo (`apps/api`, `services/ai-service`, `services/video-worker`, and `packages/database`).
 
-### The Critical Discovery
-**The existing live pipeline never transcribes audio and never sends transcript text to the AI.**
+### The Critical Discovery (Pre-Change Baseline Audit)
+
+> [!NOTE]
+> The findings below document the pre-change baseline state of the legacy system prior to the implementation of the full transcription, semantic chunking, boundary refinement, and AI scoring pipeline overhaul.
+
+**The legacy pipeline never transcribed audio and never sent transcript text to the AI.**
 
 When a user submits a podcast or YouTube video:
 1. The video file is downloaded or uploaded.

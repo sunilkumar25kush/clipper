@@ -149,7 +149,12 @@ class HighlightDiscoveryEngine:
         evidence: List[TranscriptEvidence] = []
         for s in segments:
             if s.end >= start_time and s.start <= end_time:
-                clean_text = s.text.strip()
+                # Keep evidence text consistent with its clamped boundaries if words exist
+                if s.words:
+                    matched_words = [w.word for w in s.words if w.end >= start_time - 0.1 and w.start <= end_time + 0.1]
+                    clean_text = " ".join(matched_words).strip() if matched_words else s.text.strip()
+                else:
+                    clean_text = s.text.strip()
                 if len(clean_text) > 3:
                     evidence.append(
                         TranscriptEvidence(
@@ -158,7 +163,7 @@ class HighlightDiscoveryEngine:
                             text=clean_text,
                         )
                     )
-        return evidence[:5]
+        return evidence
 
     def _snap_to_sentence_boundaries(
         self,
@@ -330,8 +335,17 @@ class HighlightDiscoveryEngine:
 
         primary_cat = max(matched_cats, key=lambda c: category_scores[c])
 
-        # Define candidate duration spanning meaningful context
-        raw_start = raw_chunk.start_time
+        # Select window centered around the matched content
+        matched_seg_idx = 0
+        patterns = CATEGORY_PATTERNS.get(primary_cat, [])
+        for idx, s in enumerate(segments):
+            if any(pat.search(s.text) for pat in patterns):
+                matched_seg_idx = idx
+                break
+
+        matched_start = segments[matched_seg_idx].start
+        lead_in = min(12.0, max(0.0, (max_dur - min_dur) / 2))
+        raw_start = max(raw_chunk.start_time, matched_start - lead_in)
         raw_end = min(raw_chunk.end_time, raw_start + max_dur)
         if raw_end - raw_start < min_dur:
             raw_end = min(raw_chunk.end_time, raw_start + min_dur)

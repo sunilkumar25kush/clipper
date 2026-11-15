@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 from typing import List, Optional
 from app.schemas.transcript import TranscriptResponse, TranscriptSegment
 from app.schemas.intelligence import (
@@ -33,7 +34,8 @@ async def analyze_transcript_intelligence(request: TranscriptIntelligenceRequest
         )
 
     try:
-        response = transcript_intelligence_engine.analyze_transcript(
+        response = await run_in_threadpool(
+            transcript_intelligence_engine.analyze_transcript,
             transcript=transcript,
             video_title=request.video_title,
             max_chunk_duration=request.max_chunk_duration,

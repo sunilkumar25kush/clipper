@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 from app.schemas.evaluation import (
     HumanClipReview,
     EvaluationReport,
@@ -38,7 +39,7 @@ async def run_benchmark_evaluation():
     and returns comprehensive Precision, Recall, Boundary IoU, and False Positive rates.
     """
     try:
-        report = clip_evaluation_engine.evaluate_benchmark_suite()
+        report = await run_in_threadpool(clip_evaluation_engine.evaluate_benchmark_suite)
         return report
     except Exception as e:
         raise HTTPException(

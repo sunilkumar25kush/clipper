@@ -75,6 +75,8 @@ class ClipEvaluationEngine:
             if bm.is_noise_only:
                 noise_benchmarks_count += 1
                 noise_clips_generated += len(predicted_clips)
+                total_predicted_all += len(predicted_clips)
+                false_positives_all += len(predicted_clips)
                 if predicted_clips:
                     for c in predicted_clips:
                         failure_cases.append({
@@ -113,6 +115,8 @@ class ClipEvaluationEngine:
                 best_iou = 0.0
 
                 for gt in bm.ground_truth_moments:
+                    if gt.moment_id in matched_gt_ids:
+                        continue
                     iou = self.compute_temporal_iou(pred.start, pred.end, gt.true_start, gt.true_end)
                     if iou > best_iou:
                         best_iou = iou
@@ -259,6 +263,7 @@ class ClipEvaluationEngine:
         # Regression criteria
         regression_passed = (
             precision >= 0.75
+            and recall >= 0.70
             and noise_fpr == 0.0
             and dup_rate == 0.0
             and cat_acc >= 0.75

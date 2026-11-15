@@ -434,6 +434,10 @@ class ClipScoringEngine:
         # Separate approved/review from hard rejected
         valid_candidates = [c for c in evaluated if c.decision in (ScoringDecision.APPROVED, ScoringDecision.REVIEW) and c.overall_score >= request.min_overall_score]
         rejected_candidates = [c for c in evaluated if c not in valid_candidates]
+        for c in rejected_candidates:
+            if c.decision != ScoringDecision.REJECTED:
+                c.decision = ScoringDecision.REJECTED
+                c.rejection_reasons.append(f"Score ({c.overall_score:.1f}) is below minimum required threshold ({request.min_overall_score:.1f}).")
 
         # Sort valid candidates by score descending, tie-breaking by hook and content
         valid_candidates.sort(
@@ -448,6 +452,7 @@ class ClipScoringEngine:
         # Diversity & Deduplication Selection
         selected: List[ScoredHighlightCandidate] = []
         category_counts: Dict[str, int] = {}
+        diversity_threshold = max(0.30, 0.60 - float(request.diversity_penalty if request.diversity_penalty is not None else 0.20))
 
         for cand in valid_candidates:
             if len(selected) >= request.max_clips_to_select:
@@ -467,14 +472,14 @@ class ClipScoringEngine:
                 rejected_candidates.append(cand)
                 continue
 
-            # Check 2: Semantic Similarity Diversity (avoid 5 clips explaining the same idea)
+            # Check 2: Semantic Similarity Diversity (avoid clips explaining the same idea)
             is_semantic_dup = False
             for accepted in selected:
                 sim = self.compute_semantic_similarity(
                     f"{cand.title} {cand.summary} {cand.hook}",
                     f"{accepted.title} {accepted.summary} {accepted.hook}",
                 )
-                if sim > 0.48:
+                if sim > diversity_threshold:
                     is_semantic_dup = True
                     break
 

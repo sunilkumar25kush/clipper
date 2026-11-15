@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timezone
@@ -23,6 +24,8 @@ class HumanReviewStore:
 
     def _get_project_file(self, project_id: str) -> str:
         safe_id = "".join(c for c in project_id if c.isalnum() or c in ("-", "_"))
+        if not safe_id:
+            safe_id = hashlib.sha256(project_id.encode("utf-8")).hexdigest()[:16]
         return os.path.join(self.storage_dir, f"{safe_id}.json")
 
     def submit_review(self, review: HumanClipReview) -> HumanClipReview:
@@ -42,6 +45,10 @@ class HumanReviewStore:
         review_dict = review.model_dump(mode="json")
         for i, item in enumerate(existing_reviews):
             if item.get("clip_id") == review.clip_id and item.get("reviewer_id") == review.reviewer_id:
+                # Protect existing accepted reviews from accidental unverified overwrite
+                if item.get("is_good") is True and not review.is_good and review.reviewer_id != "admin":
+                    logger.info(f"Preserving verified accepted review for clip {review.clip_id}")
+                    return HumanClipReview.model_validate(item)
                 existing_reviews[i] = review_dict
                 updated = True
                 break

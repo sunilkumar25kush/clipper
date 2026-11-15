@@ -105,35 +105,41 @@ class TestEvaluationAndRegression:
         assert report.overall_category_accuracy >= 0.70
         assert report.regression_passed is True
 
-    def test_evaluation_api_endpoints(self):
-        """Verifies HTTP API endpoints for human reviews and automated benchmark evaluation."""
-        client = TestClient(app)
+    def test_evaluation_api_endpoints(self, tmp_path):
+        """Verifies HTTP API endpoints for human reviews and automated benchmark evaluation with isolated storage."""
+        from app.evaluation.human_review import human_review_store
+        old_dir = human_review_store.storage_dir
+        human_review_store.storage_dir = str(tmp_path)
+        try:
+            client = TestClient(app)
 
-        # 1. POST /api/v1/evaluation/review
-        review_payload = {
-            "review_id": "api_rev_001",
-            "clip_id": "clip_http_01",
-            "project_id": "http_eval_proj",
-            "is_good": True,
-            "rating": 5,
-            "reviewer_id": "api_test_qa",
-            "notes": "Verified high content quality.",
-        }
-        res_post = client.post("/api/v1/evaluation/review", json=review_payload)
-        assert res_post.status_code == 201
-        data_post = res_post.json()
-        assert data_post["review_id"] == "api_rev_001"
-        assert data_post["is_good"] is True
+            # 1. POST /api/v1/evaluation/review
+            review_payload = {
+                "review_id": "api_rev_001",
+                "clip_id": "clip_http_01",
+                "project_id": "http_eval_proj",
+                "is_good": True,
+                "rating": 5,
+                "reviewer_id": "api_test_qa",
+                "notes": "Verified high content quality.",
+            }
+            res_post = client.post("/api/v1/evaluation/review", json=review_payload)
+            assert res_post.status_code == 201
+            data_post = res_post.json()
+            assert data_post["review_id"] == "api_rev_001"
+            assert data_post["is_good"] is True
 
-        # 2. GET /api/v1/evaluation/reviews/{project_id}
-        res_get = client.get("/api/v1/evaluation/reviews/http_eval_proj")
-        assert res_get.status_code == 200
-        data_get = res_get.json()
-        assert data_get["project_id"] == "http_eval_proj"
-        assert data_get["total_reviews"] >= 1
+            # 2. GET /api/v1/evaluation/reviews/{project_id}
+            res_get = client.get("/api/v1/evaluation/reviews/http_eval_proj")
+            assert res_get.status_code == 200
+            data_get = res_get.json()
+            assert data_get["project_id"] == "http_eval_proj"
+            assert data_get["total_reviews"] >= 1
 
-        # 3. GET /api/v1/evaluation/metrics
-        res_metrics = client.get("/api/v1/evaluation/metrics")
-        assert res_metrics.status_code == 200
-        assert res_metrics.json()["status"] == "ok"
+            # 3. GET /api/v1/evaluation/metrics
+            res_metrics = client.get("/api/v1/evaluation/metrics")
+            assert res_metrics.status_code == 200
+            assert res_metrics.json()["status"] == "ok"
+        finally:
+            human_review_store.storage_dir = old_dir
 

@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from app.schemas.transcript import TranscriptSegment
 
 logger = logging.getLogger("clipforge.semantic_chunker")
@@ -137,9 +137,10 @@ class SemanticChunker:
                     should_break = True
                 elif exceeds_target and speaker_transition:
                     should_break = True
-            elif exceeds_max and sentence_ended:
-                # Force break at complete sentence once max duration is exceeded
-                should_break = True
+            elif exceeds_max:
+                # Force break at sentence end, or unconditionally if duration exceeds max * 1.25 when punctuation is absent
+                if sentence_ended or cur_duration >= eff_max * 1.25 or silence_gap or speaker_transition:
+                    should_break = True
 
             if should_break and current_chunk_segments:
                 chunk_id = f"chunk_{chunk_idx:03d}"
@@ -158,11 +159,20 @@ class SemanticChunker:
                 chunk_idx += 1
 
                 # Carry over overlap segments for narrative continuity
-                if has_next and eff_overlap_segs > 0:
-                    overlap_count = min(len(current_chunk_segments), eff_overlap_segs)
-                    overlap_seed = current_chunk_segments[-overlap_count:]
-                    # Only carry forward if it was a valid complete segment
-                    current_chunk_segments = list(overlap_seed)
+                if has_next and (eff_overlap_segs > 0 or (overlap_duration and overlap_duration > 0)):
+                    if overlap_duration and overlap_duration > 0:
+                        acc_dur = 0.0
+                        overlap_seed = []
+                        for s in reversed(current_chunk_segments):
+                            acc_dur += (s.end - s.start)
+                            overlap_seed.insert(0, s)
+                            if acc_dur >= overlap_duration:
+                                break
+                        current_chunk_segments = list(overlap_seed) if len(overlap_seed) < len(current_chunk_segments) else []
+                    else:
+                        overlap_count = min(len(current_chunk_segments), eff_overlap_segs)
+                        overlap_seed = current_chunk_segments[-overlap_count:]
+                        current_chunk_segments = list(overlap_seed)
                 else:
                     current_chunk_segments = []
 

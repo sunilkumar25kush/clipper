@@ -98,14 +98,17 @@ class TranscriptIntelligenceEngine:
         if not client:
             raise RuntimeError("Gemini client unavailable")
 
-        cache_key = self._hash_text(raw_chunk.full_text)
+        # Include timestamp context in the cache key so identical repetitive text across different scenes gets accurate bounds
+        cache_key = self._hash_text(f"{raw_chunk.start_time:.2f}_{raw_chunk.end_time:.2f}_{raw_chunk.full_text}")
         if cache_key in self._cache:
             return self._cache[cache_key]
 
         formatted_dialogue = self._format_chunk_transcript(raw_chunk.segments)
-        system_instruction = INTELLIGENCE_SYSTEM_PROMPT.format(
-            chunk_start=raw_chunk.start_time,
-            chunk_end=raw_chunk.end_time,
+        # Use string replacement instead of str.format to safely preserve JSON curly braces in system prompt
+        system_instruction = (
+            INTELLIGENCE_SYSTEM_PROMPT
+            .replace("{chunk_start}", f"{raw_chunk.start_time:.2f}")
+            .replace("{chunk_end}", f"{raw_chunk.end_time:.2f}")
         )
 
         user_prompt = f"""VIDEO CONTEXT:
@@ -342,8 +345,10 @@ Analyze this dialogue and return the requested JSON object."""
             raw_moments = chunk_data.get("key_moments", [])
             for m in raw_moments:
                 try:
-                    m_start = max(chunk.start_time, float(m.get("start_time", chunk.start_time)))
+                    m_start = max(chunk.start_time, min(chunk.end_time - 0.5, float(m.get("start_time", chunk.start_time))))
                     m_end = min(chunk.end_time, max(m_start + 0.5, float(m.get("end_time", chunk.end_time))))
+                    if m_end <= m_start:
+                        continue
                     km = KeyMoment(
                         start_time=round(m_start, 3),
                         end_time=round(m_end, 3),

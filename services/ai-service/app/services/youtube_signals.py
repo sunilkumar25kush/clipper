@@ -241,8 +241,8 @@ class YouTubeSignalService:
             # Extract start and end timestamps safely whether dict or Pydantic model
             if isinstance(cand, dict):
                 c_id = str(cand.get("candidate_id", "cand_001"))
-                start = float(cand.get("start_time", cand.get("refined_start", cand.get("start", 0.0))))
-                end = float(cand.get("end_time", cand.get("refined_end", cand.get("end", start + 15.0))))
+                start = float(cand.get("refined_start") if cand.get("refined_start") is not None else cand.get("start_time", cand.get("start", 0.0)))
+                end = float(cand.get("refined_end") if cand.get("refined_end") is not None else cand.get("end_time", cand.get("end", start + 15.0)))
             else:
                 c_id = str(getattr(cand, "candidate_id", "cand_001"))
                 start_val = getattr(cand, "refined_start", None)
@@ -316,23 +316,31 @@ class YouTubeSignalService:
 
     @staticmethod
     def _overlaps(start_a: float, end_a: float, start_b: float, end_b: float) -> bool:
-        return max(0.0, min(end_a, end_b) - max(start_a, start_b)) > 1.0
+        # Allow single-point and narrow interval bounds to match candidates cleanly
+        return min(end_a, end_b) >= max(start_a, start_b)
 
     def process_enrichment_request(
         self,
         request: YouTubeEnrichmentRequest,
     ) -> YouTubeEnrichmentResponse:
         """Processes batch enrichment request."""
+        valid_report = request.retention_report
+        # Verify provenance: report must be authorized, have points, and match video_id if provided
         has_retention = (
-            request.retention_report is not None
-            and request.retention_report.is_authorized
-            and request.retention_report.data_source == "youtube_analytics_api"
+            valid_report is not None
+            and valid_report.is_authorized
+            and valid_report.data_source == "youtube_analytics_api"
+            and len(valid_report.data_points) > 0
+            and (not request.video_id or not valid_report.video_id or request.video_id == valid_report.video_id)
         )
+        if not has_retention:
+            valid_report = None
+
         label = "Verified YouTube Analytics Retention" if has_retention else "AI-Estimated Engagement Potential"
 
         enriched_cands = self.enrich_candidates(
             candidates=request.candidates,
-            retention_report=request.retention_report,
+            retention_report=valid_report,
         )
 
         return YouTubeEnrichmentResponse(

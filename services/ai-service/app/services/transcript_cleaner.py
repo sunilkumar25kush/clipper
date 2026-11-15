@@ -17,10 +17,10 @@ NOISE_PATTERNS = [
     re.compile(r"(\*+|_+)"),
 ]
 
-# Punctuation normalization patterns
+# Punctuation normalization patterns (preserves decimals like 3.14 and thousands like 1,000)
 MULTIPLE_PUNCT = re.compile(r"([,.!?;:])\1+")
 SPACE_BEFORE_PUNCT = re.compile(r"\s+([,.!?;:])")
-SPACE_AFTER_PUNCT = re.compile(r"([,.!?;:])(?=[A-Za-z0-9])")
+SPACE_AFTER_PUNCT = re.compile(r"([!?;:])(?=[A-Za-z0-9])|([,.])(?=[A-Za-z])")
 MULTIPLE_SPACES = re.compile(r"\s+")
 
 class TranscriptCleaner:
@@ -124,18 +124,21 @@ class TranscriptCleaner:
                             word=w_text,
                             start=round(w_start, 3),
                             end=round(w_end, 3),
-                            probability=round(float(w.probability or 1.0), 3),
+                            probability=round(float(w.probability if w.probability is not None else 1.0), 3),
                         )
                     )
                     prev_w_end = w_end
+
+                if cleaned_words:
+                    cleaned_text = " ".join(cw.word for cw in cleaned_words)
 
             # Ensure speaker_id is preserved and formatted
             speaker_id = (seg.speaker_id or "SPEAKER_00").strip()
             if not speaker_id:
                 speaker_id = "SPEAKER_00"
 
-            # Compute clean confidence
-            confidence = float(seg.confidence or 1.0)
+            # Compute clean confidence (preserves explicit zero confidence)
+            confidence = float(seg.confidence if seg.confidence is not None else 1.0)
             if cleaned_words:
                 confidence = sum(w.probability for w in cleaned_words) / len(cleaned_words)
 

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 from typing import List, Dict, Optional
 from app.schemas.highlight import (
     HighlightCategory,
@@ -31,7 +32,7 @@ async def discover_highlights(request: HighlightDiscoveryRequest):
     request.transcript = transcript
 
     try:
-        response = highlight_discovery_engine.discover_highlights(request)
+        response = await run_in_threadpool(highlight_discovery_engine.discover_highlights, request)
         return response
     except ValueError as ve:
         raise HTTPException(

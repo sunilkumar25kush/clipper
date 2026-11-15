@@ -21,7 +21,7 @@ This report presents empirical evaluation data and quality benchmarks for the Cl
 
 ## 2. Benchmark Test Dataset
 
-The evaluation suite spans 10 distinct content genres representing real-world long-form video workloads. Each benchmark includes millisecond Whisper word tokens, speaker diarization, and human-annotated ground-truth boundaries:
+The evaluation suite utilizes 10 curated synthetic transcript fixtures representing diverse real-world long-form video workloads. Each synthetic benchmark fixture includes millisecond Whisper word tokens, speaker diarization, and human-annotated ground-truth boundaries:
 
 | # | Benchmark ID | Genre / Category | Title | Ground Truth Moments | Core Ground Truth Quote |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -86,10 +86,12 @@ The human evaluation system (`services/ai-service/app/evaluation/human_review.py
 | **Funny** | 1 | 1 | 1 | **100%** | **100%** | 94.4% | 100% | 100% |
 | **Important Insight** | 1 | 1 | 1 | **100%** | **100%** | 85.7% | 100% | 100% |
 | **Life Lesson** | 1 | 1 | 1 | **100%** | **100%** | 81.1% | 100% | 100% |
-| **Storytelling** | 2 | 1 | 1 | **100%** | 50.0% | 97.4% | 100% | 100% |
+| **Storytelling** | 2 | 1 | 1 | **100%** | 50.0% | 97.4% | 50%* | 100% |
 | **Strong Opinion** | 1 | 1 | 1 | **100%** | **100%** | 95.7% | 100% | 100% |
 | **Noise / Filler** | 0 | 0 | 0 | **N/A** | **N/A** | **N/A** | **N/A** | **100% (Rejected)** |
 | **OVERALL** | **9** | **8** | **8** | **100.0%** | **88.9%** | **85.9%** | **87.5%** | **100.0%** |
+
+*\*Note on Storytelling category accuracy: `bm_02_interview` contains both narrative crisis and founder takeaway; primary classification categorized it under Important Insight while identifying Storytelling as a secondary valid match, resulting in 7/8 (87.5%) exact primary category matches across all benchmarks.*
 
 ---
 

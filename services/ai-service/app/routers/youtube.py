@@ -33,9 +33,15 @@ async def map_retention_data(payload: Dict[str, Any]):
         video_id = str(payload.get("video_id", "unknown"))
         raw_rows = payload.get("rows", [])
         duration = float(payload.get("video_duration", 60.0))
-        is_auth = bool(payload.get("is_authorized", False))
         auth_channel = payload.get("authenticated_channel_id")
         video_channel = payload.get("video_channel_id")
+        # Enforce that retention authorization is valid only when verified channel matches the video owner channel
+        is_auth = (
+            bool(payload.get("is_authorized", False))
+            and bool(auth_channel)
+            and bool(video_channel)
+            and str(auth_channel).strip() == str(video_channel).strip()
+        )
 
         return youtube_signal_service.map_retention_data(
             video_id=video_id,

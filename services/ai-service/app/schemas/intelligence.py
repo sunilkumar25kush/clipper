@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from typing import List, Optional
 from datetime import datetime, timezone
 from app.schemas.transcript import TranscriptResponse
@@ -60,6 +60,12 @@ class TranscriptIntelligenceRequest(BaseModel):
     min_chunk_duration: float = Field(default=45.0, ge=15.0, description="Minimum duration for a semantic chunk in seconds")
     max_chunk_duration: float = Field(default=240.0, le=600.0, description="Maximum duration for a semantic chunk in seconds")
     overlap_duration: float = Field(default=15.0, ge=0.0, description="Context overlap duration between chunks in seconds")
+
+    @model_validator(mode="after")
+    def validate_durations(self) -> "TranscriptIntelligenceRequest":
+        if self.max_chunk_duration <= self.min_chunk_duration:
+            raise ValueError(f"max_chunk_duration ({self.max_chunk_duration}) must be strictly greater than min_chunk_duration ({self.min_chunk_duration})")
+        return self
 
 class TranscriptIntelligenceResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")

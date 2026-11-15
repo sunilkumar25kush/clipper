@@ -61,6 +61,9 @@ class IntelligentBoundaryRefiner:
         for i, s in enumerate(segments):
             if s.start <= raw_start <= s.end:
                 start_idx = i
+                # If current segment is in the middle of a sentence and previous segment was not terminal, include opening
+                if i > 0 and not TERMINAL_PUNCTUATION.search(segments[i - 1].text.strip()):
+                    start_idx = i - 1
                 break
             elif s.start > raw_start:
                 if i > 0 and segments[i - 1].end < raw_start:
@@ -105,15 +108,19 @@ class IntelligentBoundaryRefiner:
         start_time = segments[start_seg_idx].start
         target_end_idx = start_seg_idx
 
-        # Find initial segment covering raw_end
-        for i in range(start_seg_idx, len(segments)):
-            s = segments[i]
-            if s.start <= raw_end <= s.end:
-                target_end_idx = i
-                break
-            elif s.end > raw_end:
-                target_end_idx = i
-                break
+        # If raw_end exceeds the end of all segments, use the last segment
+        if raw_end >= segments[-1].end:
+            target_end_idx = len(segments) - 1
+        else:
+            # Find initial segment covering raw_end
+            for i in range(start_seg_idx, len(segments)):
+                s = segments[i]
+                if s.start <= raw_end <= s.end:
+                    target_end_idx = i
+                    break
+                elif s.end > raw_end:
+                    target_end_idx = i
+                    break
 
         # Search forward for terminal punctuation to prevent mid-sentence cutoff
         optimal_end_idx = target_end_idx
@@ -133,6 +140,14 @@ class IntelligentBoundaryRefiner:
         # Check duration constraint
         refined_end_time = segments[optimal_end_idx].end
         cur_duration = refined_end_time - start_time
+
+        # Ensure minimum duration is satisfied if subsequent segments exist
+        while cur_duration < min_dur and optimal_end_idx + 1 < len(segments):
+            optimal_end_idx += 1
+            refined_end_time = segments[optimal_end_idx].end
+            cur_duration = refined_end_time - start_time
+            if TERMINAL_PUNCTUATION.search(segments[optimal_end_idx].text.strip()):
+                break
 
         needs_review = False
         review_reason = None
@@ -166,7 +181,7 @@ class IntelligentBoundaryRefiner:
             # Acoustic lead-in buffer (avoid speech clipping, but trim dead silence)
             snapped_start = max(0.0, first_word.start - self.PRE_ROLL_ACOUSTIC_BUFFER)
             snapped_end = min(video_duration, last_word.end + self.POST_ROLL_ACOUSTIC_BUFFER)
-            word_level_accurate = True
+            word_level_accurate = bool(first_word.probability is not None and first_word.probability > 0.0)
         else:
             snapped_start = max(0.0, start_seg.start)
             snapped_end = min(video_duration, end_seg.end)
@@ -191,10 +206,12 @@ class IntelligentBoundaryRefiner:
         visual_aligned = False
 
         for cut in scene_cuts:
-            if abs(cut - start_time) <= self.SCENE_CUT_TOLERANCE:
+            # Prevent scene cut alignment from moving inside spoken words (start cut should be before or at speech start)
+            if abs(cut - start_time) <= self.SCENE_CUT_TOLERANCE and cut <= start_time:
                 aligned_start = cut
                 visual_aligned = True
-            if abs(cut - end_time) <= self.SCENE_CUT_TOLERANCE:
+            # End cut should be after or at speech end to prevent truncating spoken words
+            if abs(cut - end_time) <= self.SCENE_CUT_TOLERANCE and cut >= end_time:
                 aligned_end = cut
                 visual_aligned = True
 
@@ -263,6 +280,11 @@ class IntelligentBoundaryRefiner:
         final_start = max(0.0, min(final_start, video_duration - 2.0))
         final_end = min(video_duration, max(final_end, final_start + 1.0))
         duration = round(final_end - final_start, 2)
+
+        # Re-check maximum duration after all acoustic and visual boundary adjustments
+        if duration > max_duration:
+            needs_review = True
+            review_reason = f"Candidate duration ({duration:.1f}s) exceeds target max ({max_duration:.1f}s) to preserve complete sentence conclusion."
 
         # 6. Context summaries
         opening_summary = f"Opens cleanly at [{start_seg.speaker_id}]: \"{start_seg.text[:55]}...\""

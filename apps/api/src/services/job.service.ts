@@ -795,12 +795,14 @@ export class JobService {
         part_number?: number;
         words?: Array<{ word: string; start: number; end: number; probability?: number }>;
       }> = [];
+      let aiServiceSucceeded = false;
 
       try {
         console.log(`[JobService] Calling Content Intelligence Pipeline at ${aiServiceUrl}/api/v1/pipeline/process (mode: ${project.generationMode || "HIGHLIGHTS"})...`);
+        const resolvedAudioPath = fs.existsSync(audioWavPath) ? path.resolve(audioWavPath) : undefined;
         const pipelinePayload = {
           project_id: projectId,
-          audio_path: fs.existsSync(audioWavPath) ? audioWavPath : undefined,
+          audio_path: resolvedAudioPath,
           video_duration: videoDuration,
           video_title: project.title || "Featured Video",
           min_clip_duration: project.minClipDuration || (isPartsMode ? 45 : 15),
@@ -826,6 +828,7 @@ export class JobService {
           };
           console.log(`[JobService] AI Content Intelligence Pipeline returned ${result.clips_generated} clips:`, result.message);
           pipelineClips = result.clips || [];
+          aiServiceSucceeded = true;
         } else {
           const errText = await aiResponse.text();
           console.warn(`[JobService] AI Service returned status ${aiResponse.status}: ${errText}. Falling back to content identification.`);
@@ -834,8 +837,8 @@ export class JobService {
         console.warn(`[JobService] AI Content Intelligence Service call failed (${connErr}). Falling back to content identification.`);
       }
 
-      // If AI service was unreachable and returned no clips, fallback to geminiService
-      if (pipelineClips.length === 0) {
+      // If AI service was unreachable/failed and returned no clips, fallback to geminiService
+      if (!aiServiceSucceeded && pipelineClips.length === 0) {
         console.log(`[JobService] Using Gemini content analysis fallback for project ${projectId}...`);
         const targetClipsCount = project.maxClipsToGen || 10;
         const aiAnalysis = await geminiService.identifyContentAndClips({

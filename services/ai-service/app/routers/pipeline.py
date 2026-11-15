@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 from app.schemas.pipeline import (
     PipelineProcessRequest,
     PipelineProcessResponse,
@@ -27,7 +28,7 @@ async def process_pipeline(request: PipelineProcessRequest):
         request.transcript = transcript_storage.get_transcript(request.transcript_id)
 
     try:
-        response = pipeline_orchestrator.process(request)
+        response = await run_in_threadpool(pipeline_orchestrator.process, request)
         return response
     except ValueError as ve:
         raise HTTPException(
