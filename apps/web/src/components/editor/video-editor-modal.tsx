@@ -63,19 +63,57 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
   const [position, setPosition] = React.useState<"BOTTOM_SAFE" | "CENTER" | "TOP">(
     initialPos === "CENTER" || initialPos === "TOP" ? initialPos : "BOTTOM_SAFE",
   );
+  const [captionsEnabled, setCaptionsEnabled] = React.useState<boolean>(() => {
+    if (!clip.caption) return false;
+    return clip.caption.presetId !== "none";
+  });
 
-  // Transcript cues state
+  // Transcript cues state - strictly spoken dialogue cues, never fallback to title
   const [cues, setCues] = React.useState<SubtitleCue[]>(() => {
-    if (clip.caption?.captionsJson && Array.isArray(clip.caption.captionsJson)) {
-      return clip.caption.captionsJson.map((c) => ({
-        start: c.start,
-        end: c.end,
-        text: c.text,
-      }));
+    const raw = clip.caption?.captionsJson;
+    if (!raw) return [];
+
+    if (Array.isArray(raw)) {
+      return raw
+        .map((c: any) => ({
+          start: Number(c.start ?? c.startSeconds ?? 0),
+          end: Number(c.end ?? c.endSeconds ?? 0),
+          text: String(c.text ?? c.word ?? "").trim(),
+        }))
+        .filter((c) => c.text.length > 0);
     }
-    return [
-      { start: clip.startTime, end: clip.endTime, text: clip.title },
-    ];
+
+    if (typeof raw === "object" && raw !== null) {
+      const obj = raw as Record<string, any>;
+      if (Array.isArray(obj.words)) {
+        const words: any[] = obj.words;
+        const grouped: SubtitleCue[] = [];
+        const chunkSize = 3;
+        for (let i = 0; i < words.length; i += chunkSize) {
+          const slice = words.slice(i, i + chunkSize);
+          if (slice.length > 0) {
+            const start = Number(slice[0].startSeconds ?? slice[0].start ?? 0);
+            const end = Number(slice[slice.length - 1].endSeconds ?? slice[slice.length - 1].end ?? 0);
+            const text = slice.map((w: any) => w.word ?? "").join(" ").trim();
+            if (text) {
+              grouped.push({ start, end, text });
+            }
+          }
+        }
+        return grouped;
+      }
+      if (Array.isArray(obj.cues)) {
+        return (obj.cues as any[])
+          .map((c: any) => ({
+            start: Number(c.start ?? c.startSeconds ?? 0),
+            end: Number(c.end ?? c.endSeconds ?? 0),
+            text: String(c.text ?? c.word ?? "").trim(),
+          }))
+          .filter((c) => c.text.length > 0);
+      }
+    }
+
+    return [];
   });
 
   // Framing & crop state
@@ -102,9 +140,9 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Active caption text for live preview overlay
+  // Active caption text for live preview overlay - strictly spoken subtitle dialogue, NEVER the clip title
   const activeCue = cues.find((c) => currentTime >= c.start && currentTime <= c.end);
-  const activeCaptionText = activeCue?.text || cues[0]?.text || title;
+  const activeCaptionText = captionsEnabled && activeCue ? activeCue.text : "";
 
   const handleCueTextChange = (index: number, newText: string) => {
     setCues((prev) => {
@@ -129,9 +167,10 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
           category,
           startTime,
           endTime,
-          presetId,
+          presetId: captionsEnabled ? (presetId === "none" ? "viral-highlight" : presetId) : "none",
           fontSize,
           position,
+          captionsEnabled,
         }),
       });
 
@@ -244,6 +283,8 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
                 captionPreset={presetId}
                 captionFontSize={fontSize}
                 captionPosition={position}
+                showCaptions={captionsEnabled}
+                onToggleCaptions={() => setCaptionsEnabled((prev) => !prev)}
                 cropMode={cropMode}
                 focusX={focusX}
               />
@@ -306,6 +347,8 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
                   onFontSizeChange={setFontSize}
                   position={position}
                   onPositionChange={setPosition}
+                  captionsEnabled={captionsEnabled}
+                  onCaptionsEnabledChange={setCaptionsEnabled}
                 />
               )}
 

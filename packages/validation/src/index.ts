@@ -171,6 +171,7 @@ export const updateClipSchema = z.object({
   position: z.enum(["TOP", "CENTER", "BOTTOM", "BOTTOM_SAFE"]).optional(),
   primaryColorHex: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   highlightColorHex: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  captionsEnabled: z.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

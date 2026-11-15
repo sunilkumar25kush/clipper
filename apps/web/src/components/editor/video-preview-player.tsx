@@ -10,6 +10,7 @@ import {
   CornersIn,
   DeviceMobile,
   FilmSlate,
+  ClosedCaptioning,
 } from "phosphor-react";
 import { AspectRatio } from "@clipforge/shared-types";
 
@@ -27,6 +28,8 @@ export interface VideoPreviewPlayerProps {
   captionPosition?: "TOP" | "CENTER" | "BOTTOM_SAFE" | "BOTTOM";
   cropMode?: string;
   focusX?: number; // 0.0 to 1.0
+  showCaptions?: boolean;
+  onToggleCaptions?: () => void;
 }
 
 export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
@@ -41,6 +44,8 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
   captionPreset = "viral-highlight",
   captionFontSize = 64,
   captionPosition = "BOTTOM_SAFE",
+  showCaptions = true,
+  onToggleCaptions,
 }) => {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -82,6 +87,9 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
       if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
+      } else if (e.code === "KeyC") {
+        e.preventDefault();
+        onToggleCaptions?.();
       } else if (e.code === "ArrowLeft") {
         e.preventDefault();
         onSeek(Math.max(0, currentTime - 1));
@@ -93,7 +101,7 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [togglePlay, onSeek, currentTime, duration]);
+  }, [togglePlay, onSeek, currentTime, duration, onToggleCaptions]);
 
   const toggleMute = () => {
     if (!videoRef.current) return;
@@ -187,8 +195,8 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
           </div>
         </button>
 
-        {/* Live Subtitle Overlay Preview */}
-        {captionText && (
+        {/* Live Subtitle Overlay Preview - ONLY displays spoken dialogue captions, NEVER titles */}
+        {showCaptions && captionText && (
           <div
             className={`absolute left-0 right-0 px-4 text-center pointer-events-none transition-all ${
               captionPosition === "TOP"
@@ -281,6 +289,21 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
           aria-label="Seek video position"
           className="flex-1 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white"
         />
+
+        {/* Closed Captions Toggle */}
+        {onToggleCaptions && (
+          <button
+            type="button"
+            onClick={onToggleCaptions}
+            title={showCaptions ? "Turn off captions (C)" : "Turn on captions (C)"}
+            aria-label={showCaptions ? "Turn off captions" : "Turn on captions"}
+            className={`p-1 rounded-md transition-colors ${
+              showCaptions ? "bg-amber-500/20 text-amber-400 font-bold" : "text-zinc-500 hover:text-white"
+            }`}
+          >
+            <ClosedCaptioning size={15} weight={showCaptions ? "fill" : "regular"} />
+          </button>
+        )}
 
         {/* Safe Zones Toggle */}
         <button

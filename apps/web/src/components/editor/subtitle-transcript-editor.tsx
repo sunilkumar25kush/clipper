@@ -6,6 +6,7 @@ import {
   Sparkle,
   Play,
   Check,
+  ClosedCaptioning,
 } from "phosphor-react";
 
 export interface SubtitleCue {
@@ -25,6 +26,8 @@ export interface SubtitleTranscriptEditorProps {
   onFontSizeChange: (size: number) => void;
   position: "BOTTOM_SAFE" | "CENTER" | "TOP";
   onPositionChange: (pos: "BOTTOM_SAFE" | "CENTER" | "TOP") => void;
+  captionsEnabled: boolean;
+  onCaptionsEnabledChange: (enabled: boolean) => void;
 }
 
 export const SubtitleTranscriptEditor: React.FC<SubtitleTranscriptEditorProps> = ({
@@ -38,6 +41,8 @@ export const SubtitleTranscriptEditor: React.FC<SubtitleTranscriptEditorProps> =
   onFontSizeChange,
   position,
   onPositionChange,
+  captionsEnabled,
+  onCaptionsEnabledChange,
 }) => {
   const activeCueIndex = cues.findIndex(
     (c) => currentTime >= c.start && currentTime <= c.end,
@@ -69,6 +74,49 @@ export const SubtitleTranscriptEditor: React.FC<SubtitleTranscriptEditorProps> =
 
   return (
     <div className="space-y-5 text-xs">
+      {/* Caption Master Visibility Toggle */}
+      <div className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#181818]">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+              captionsEnabled
+                ? "bg-amber-500/10 text-amber-500"
+                : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+            }`}
+          >
+            <ClosedCaptioning size={18} weight={captionsEnabled ? "fill" : "regular"} />
+          </div>
+          <div>
+            <div className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">
+              Captions & Subtitles
+            </div>
+            <div className="text-[11px] text-zinc-500">
+              {captionsEnabled
+                ? "Displaying spoken dialogue over the video"
+                : "Captions are disabled / hidden"}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={captionsEnabled}
+          aria-label="Toggle subtitles on or off"
+          onClick={() => onCaptionsEnabledChange(!captionsEnabled)}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white ${
+            captionsEnabled ? "bg-amber-500" : "bg-zinc-300 dark:bg-zinc-700"
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+              captionsEnabled ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+
+      <div className={captionsEnabled ? "space-y-5" : "space-y-5 opacity-40 pointer-events-none select-none transition-opacity"}>
       {/* Subtitle Style Presets */}
       <div>
         <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 mb-2">
@@ -200,6 +248,7 @@ export const SubtitleTranscriptEditor: React.FC<SubtitleTranscriptEditorProps> =
             })
           )}
         </div>
+      </div>
       </div>
     </div>
   );

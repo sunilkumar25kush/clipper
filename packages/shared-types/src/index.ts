@@ -215,12 +215,7 @@ export interface ClipCaptionDTO {
   strokeWidth: number;
   position: "TOP" | "CENTER" | "BOTTOM" | "BOTTOM_SAFE";
   wordsPerLine: number;
-  captionsJson: Array<{
-    start: number;
-    end: number;
-    text: string;
-    words?: Array<{ word: string; start: number; end: number }>;
-  }>;
+  captionsJson: unknown;
 }
 
 export interface ExportDTO {

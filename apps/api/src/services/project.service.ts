@@ -522,6 +522,15 @@ export class ProjectService {
     }
     if (input.primaryColorHex !== undefined) captionUpdate.primaryColorHex = input.primaryColorHex;
     if (input.highlightColorHex !== undefined) captionUpdate.highlightColorHex = input.highlightColorHex;
+    if (input.captionsEnabled !== undefined) {
+      if (!input.captionsEnabled) {
+        captionUpdate.presetId = "none";
+      } else if (input.presetId && input.presetId !== "none") {
+        captionUpdate.presetId = input.presetId;
+      } else if (existing.caption?.presetId === "none") {
+        captionUpdate.presetId = "viral-highlight";
+      }
+    }
 
     const [updatedClip] = await prisma.$transaction([
       prisma.clip.update({
@@ -679,7 +688,7 @@ export class ProjectService {
             strokeWidth: c.caption.strokeWidth,
             position: c.caption.position === "BOTTOM_SAFE" ? "BOTTOM_SAFE" : (c.caption.position as "TOP" | "CENTER" | "BOTTOM"),
             wordsPerLine: c.caption.wordsPerLine,
-            captionsJson: (c.caption.captionsJson as Array<{ start: number; end: number; text: string }>) || [],
+            captionsJson: (c.caption.captionsJson as unknown) || [],
           }
         : null,
       exports: (c.exports || []).map((exp) => ({
