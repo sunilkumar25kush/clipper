@@ -22,60 +22,55 @@ class DiarizationService:
         if not words:
             return []
 
-        if not speaker_turns:
-            # Single speaker fallback
-            full_text = " ".join(w.word.strip() for w in words)
-            avg_conf = sum(w.probability for w in words) / max(len(words), 1)
-            return [
-                TranscriptSegment(
-                    start=words[0].start,
-                    end=words[-1].end,
-                    text=full_text,
-                    speaker_id=default_speaker,
-                    confidence=round(avg_conf, 3),
-                    words=words,
-                )
-            ]
-
         # 1. Assign each word to best speaker turn
         annotated_words: List[tuple[WordTimestamp, str]] = []
-        for word in words:
-            best_speaker = default_speaker
-            max_overlap = 0.0
+        if not speaker_turns:
+            # Single speaker: annotate all words with default speaker
+            annotated_words = [(w, default_speaker) for w in words]
+        else:
+            for word in words:
+                best_speaker = default_speaker
+                max_overlap = 0.0
 
-            for turn in speaker_turns:
-                # Calculate temporal intersection
-                overlap_start = max(word.start, turn.start)
-                overlap_end = min(word.end, turn.end)
-                overlap = max(0.0, overlap_end - overlap_start)
+                for turn in speaker_turns:
+                    # Calculate temporal intersection
+                    overlap_start = max(word.start, turn.start)
+                    overlap_end = min(word.end, turn.end)
+                    overlap = max(0.0, overlap_end - overlap_start)
 
-                if overlap > max_overlap:
-                    max_overlap = overlap
-                    best_speaker = turn.speaker_id
+                    if overlap > max_overlap:
+                        max_overlap = overlap
+                        best_speaker = turn.speaker_id
 
-            # If word fell in between turns, find closest turn
-            if max_overlap == 0.0:
-                closest_turn = min(
-                    speaker_turns,
-                    key=lambda t: min(abs(word.start - t.end), abs(word.end - t.start)),
-                )
-                best_speaker = closest_turn.speaker_id
+                # If word fell in between turns, find closest turn
+                if max_overlap == 0.0:
+                    closest_turn = min(
+                        speaker_turns,
+                        key=lambda t: min(abs(word.start - t.end), abs(word.end - t.start)),
+                    )
+                    best_speaker = closest_turn.speaker_id
 
-            annotated_words.append((word, best_speaker))
+                annotated_words.append((word, best_speaker))
 
-        # 2. Group consecutive words sharing the same speaker into segments
+        # 2. Group consecutive words sharing the same speaker into natural segments
+        # Splits on speaker turns, natural pauses (> 1.2s), sentence boundaries, or max duration (18s)
         segments: List[TranscriptSegment] = []
         current_speaker: Optional[str] = None
         current_words: List[WordTimestamp] = []
 
         for word, speaker in annotated_words:
-            # Check for speaker boundary or prolonged pause (> 2.5 seconds)
-            pause_detected = current_words and (word.start - current_words[-1].end > 2.5)
-            
+            pause_detected = current_words and (word.start - current_words[-1].end > 1.2)
+            cur_dur = (current_words[-1].end - current_words[0].start) if current_words else 0.0
+            last_word_text = current_words[-1].word.rstrip() if current_words else ""
+            sentence_terminal = bool(last_word_text and last_word_text[-1] in (".", "!", "?", "…"))
+            length_exceeded = cur_dur >= 18.0 or (cur_dur >= 6.0 and sentence_terminal)
+
+            should_break = (current_speaker is not None and current_speaker != speaker) or pause_detected or length_exceeded
+
             if current_speaker is None:
                 current_speaker = speaker
                 current_words.append(word)
-            elif current_speaker == speaker and not pause_detected:
+            elif not should_break:
                 current_words.append(word)
             else:
                 # Flush segment

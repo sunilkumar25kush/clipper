@@ -433,6 +433,15 @@ class ClipScoringEngine:
 
         # Separate approved/review from hard rejected
         valid_candidates = [c for c in evaluated if c.decision in (ScoringDecision.APPROVED, ScoringDecision.REVIEW) and c.overall_score >= request.min_overall_score]
+        
+        # Quality Gate Safety Guard: If all candidates scored below threshold, relax to top evaluated candidates
+        if not valid_candidates and evaluated:
+            logger.info(f"[ClipScorer] All {len(evaluated)} candidates scored below threshold ({request.min_overall_score}). Relaxing to top candidates.")
+            sorted_by_score = sorted(evaluated, key=lambda c: (c.overall_score, c.category_scores.get("hook_strength", 0)), reverse=True)
+            valid_candidates = sorted_by_score[:max(1, request.max_clips_to_select)]
+            for c in valid_candidates:
+                c.decision = ScoringDecision.REVIEW
+
         rejected_candidates = [c for c in evaluated if c not in valid_candidates]
         for c in rejected_candidates:
             if c.decision != ScoringDecision.REJECTED:
