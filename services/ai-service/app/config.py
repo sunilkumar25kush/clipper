@@ -15,12 +15,12 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     
     # Whisper compute configuration
-    whisper_model: str = "large-v3-turbo"
+    whisper_model: str = os.environ.get("WHISPER_MODEL", "base")
     whisper_device: Literal["cpu", "cuda", "auto"] = "auto"
     whisper_compute_type: Literal["int8", "float16", "float32", "default"] = "int8"
     whisper_beam_size: int = 5
     whisper_vad_filter: bool = True
-    whisper_backend: Literal["faster-whisper", "mock", "auto"] = "mock" if os.name == "nt" else "auto"
+    whisper_backend: Literal["faster-whisper", "mock", "auto"] = "auto"
     
     # Long-video chunking thresholds (in seconds)
     chunk_threshold_seconds: float = 1800.0  # 30 minutes

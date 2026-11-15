@@ -53,6 +53,7 @@ export interface GenerateClipsJobOptions {
   fontSize?: number;
   fontFamily?: string;
   concurrency?: number;
+  forceRerender?: boolean;
   onClipRendered?: (completedIndex: number, totalClips: number) => Promise<void>;
 }
 
@@ -144,13 +145,15 @@ export class AutomaticClipGenerator {
 
         const { cand, rankOrder } = item;
 
-        // Check if an identical clip has already been rendered in a previous run
-        const existing = existingClips.find(
-          (ec) =>
-            Math.abs(ec.startTime - cand.start) < 0.35 &&
-            Math.abs(ec.endTime - cand.end) < 0.35 &&
-            ec.exports.length > 0
-        );
+        // Check if an identical clip has already been rendered in a previous run (unless forceRerender is requested)
+        const existing = !options.forceRerender
+          ? existingClips.find(
+              (ec) =>
+                Math.abs(ec.startTime - cand.start) < 0.35 &&
+                Math.abs(ec.endTime - cand.end) < 0.35 &&
+                ec.exports.length > 0
+            )
+          : null;
 
         if (existing && existing.exports[0]) {
           console.log(`[AutomaticClipGenerator] Clip #${rankOrder} ("${cand.title}") was already rendered, reusing existing asset!`);
@@ -250,7 +253,7 @@ export class AutomaticClipGenerator {
 
     // Filter and offset words to be relative to the clip start
     const relativeWords: AssWordToken[] = transcriptWords
-      .filter((w) => w.startSeconds >= candidate.start - 0.2 && w.endSeconds <= candidate.end + 0.2)
+      .filter((w) => w.endSeconds >= candidate.start && w.startSeconds <= candidate.end)
       .map((w) => ({
         word: w.word,
         startSeconds: Math.max(0, w.startSeconds - candidate.start),
@@ -270,7 +273,7 @@ export class AutomaticClipGenerator {
         assPath = path.join(scratchDir, "subtitles.ass");
         subtitleBurner.generateWordHighlightAssFile(assPath, relativeWords, {
           fontFamily: params.fontFamily || "Arial",
-          fontSize: params.fontSize || (targetAspect === AspectRatio.RATIO_9_16 ? 26 : 22),
+          fontSize: params.fontSize || (targetAspect === AspectRatio.RATIO_9_16 ? 60 : 38),
           stylePreset: subtitlePreset,
           position: captionPosition,
           wordsPerLine: 3,
@@ -484,7 +487,7 @@ export class AutomaticClipGenerator {
             create: {
               presetId: subtitlePreset.toString().toLowerCase(),
               fontFamily: params.fontFamily || "Arial",
-              fontSize: params.fontSize || 26,
+              fontSize: params.fontSize || (targetAspect === AspectRatio.RATIO_9_16 ? 60 : 38),
               primaryColorHex: "#FFFFFF",
               highlightColorHex: "#FACC15",
               strokeColorHex: "#000000",

@@ -68,11 +68,14 @@ class TranscriptionService:
             try:
                 with open(cache_path, "r", encoding="utf-8") as f:
                     cached_data = json.load(f)
-                logger.info(
-                    f"[Transcription] Loaded cached transcript for {request.project_id} from {cache_path} "
-                    f"({len(cached_data.get('segments', []))} segments, {cached_data.get('word_count', 0)} words)"
-                )
-                return TranscriptResponse(**cached_data)
+                if cached_data.get("model_used") != "faster-whisper-mock-fallback":
+                    logger.info(
+                        f"[Transcription] Loaded cached transcript for {request.project_id} from {cache_path} "
+                        f"({len(cached_data.get('segments', []))} segments, {cached_data.get('word_count', 0)} words)"
+                    )
+                    return TranscriptResponse(**cached_data)
+                else:
+                    logger.info(f"[Transcription] Discarding invalid mock fallback cache at {cache_path}")
             except Exception as e:
                 logger.warning(f"[Transcription] Failed to load cache from {cache_path}: {e}")
 
@@ -121,7 +124,7 @@ class TranscriptionService:
 
         try:
             with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump(response.model_dump(), f)
+                json.dump(response.model_dump(mode="json"), f)
             logger.info(f"[Transcription] Successfully cached transcript to {cache_path}")
         except Exception as e:
             logger.warning(f"[Transcription] Could not cache transcript to {cache_path}: {e}")

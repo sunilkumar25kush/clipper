@@ -253,17 +253,34 @@ class ContentIntelligencePipeline:
 
             ret_info = retention_map.get(refined.candidate_id)
 
-            # Slice words belonging specifically to this refined window [start - 0.05, end + 0.05]
+            # Slice words belonging specifically to this refined window [start - 0.15, end + 0.15]
             clip_words = [
                 w for w in all_transcript_words
-                if w.end >= (refined.refined_start - 0.05) and w.start <= (refined.refined_end + 0.05)
+                if w.end >= (refined.refined_start - 0.15) and w.start <= (refined.refined_end + 0.15)
             ]
 
-            # Construct clean subtitle text
+            # Construct clean subtitle text and ensure word timestamps are always populated
             if clip_words:
                 subtitle_text = " ".join(w.word for w in clip_words)
             else:
-                subtitle_text = f"{refined.opening_context} {refined.closing_context}".strip()
+                fallback_txt = f"{refined.opening_context} {refined.closing_context}".strip()
+                if not fallback_txt:
+                    fallback_txt = scored.title
+                subtitle_text = fallback_txt
+                # Synthesize word timestamps across clip duration so captions always render
+                words_list = fallback_txt.split()
+                if words_list:
+                    dur = max(1.0, refined.refined_end - refined.refined_start)
+                    step = dur / len(words_list)
+                    for i, wrd in enumerate(words_list):
+                        clip_words.append(
+                            WordTimestamp(
+                                word=wrd,
+                                start=round(refined.refined_start + i * step, 2),
+                                end=round(refined.refined_start + (i + 1) * step, 2),
+                                probability=0.95,
+                            )
+                        )
 
             # Format clip title cleanly, incorporating project video title if provided
             title = scored.title

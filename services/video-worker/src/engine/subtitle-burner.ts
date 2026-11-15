@@ -167,25 +167,26 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     const title = options.title || "ClipForge Word Highlight Subtitles";
     const fontFamily = options.fontFamily || "Arial";
-    const fontSize = options.fontSize || 28;
     const playResX = options.videoWidth || 1080;
     const playResY = options.videoHeight || 1920;
+    const isVertical = playResY > playResX;
+    const fontSize = options.fontSize || (isVertical ? 60 : 38);
 
     const primaryAssColor = hexToAssColor(options.primaryColorHex || "#FFFFFF");
     const highlightAssColor = hexToAssColor(options.highlightColorHex || "#FACC15"); // Gold / Yellow
     const outlineAssColor = hexToAssColor(options.outlineColorHex || "#000000");
-    const outlineWidth = options.outlineWidth ?? 4;
-    const shadowDist = options.shadowDistance ?? 1;
+    const outlineWidth = options.outlineWidth ?? (isVertical ? 5 : 3);
+    const shadowDist = options.shadowDistance ?? 2;
 
     let alignment = 2; // Bottom Center
-    let marginV = 80;
+    let marginV = isVertical ? 280 : 80;
     const pos = options.position ? String(options.position) : "BOTTOM";
     if (pos === "CENTER") {
       alignment = 5;
       marginV = 0;
     } else if (pos === "TOP") {
       alignment = 8;
-      marginV = 80;
+      marginV = isVertical ? 280 : 80;
     }
 
     const preset = options.stylePreset ? String(options.stylePreset) : "VIRAL_HIGHLIGHT";
@@ -238,13 +239,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           const activeWord = cardWords[i];
           if (!activeWord) continue;
 
+          const nextWord = cardWords[i + 1] || words[c + wordsPerCard];
+          // Extend wEnd to next word start if within 0.8s to prevent flickering between words and phrases
+          const naturalEnd = nextWord && nextWord.startSeconds > activeWord.endSeconds && (nextWord.startSeconds - activeWord.endSeconds) < 0.8
+            ? nextWord.startSeconds
+            : Math.max(activeWord.startSeconds + 0.1, activeWord.endSeconds);
+
           const wStart = secondsToAssTimestamp(Math.max(0, activeWord.startSeconds));
-          const wEnd = secondsToAssTimestamp(Math.max(activeWord.startSeconds + 0.05, activeWord.endSeconds));
+          const wEnd = secondsToAssTimestamp(naturalEnd);
 
           const formattedWords = cardWords.map((w, idx) => {
             const cleanWord = w.word.replace(/[{}]/g, "").trim();
             if (idx === i) {
-              // Active highlight tag
+              // Active highlight tag with bold and gold color
               return `{\\c${highlightAssColor}\\b1}${cleanWord}{\\c${primaryAssColor}\\b0}`;
             }
             return cleanWord;

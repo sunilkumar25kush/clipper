@@ -816,7 +816,7 @@ export class JobService {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(pipelinePayload),
-          signal: AbortSignal.timeout(60000),
+          signal: AbortSignal.timeout(600000), // 10 minutes timeout for long-form Whisper transcription
         });
 
         if (aiResponse.ok) {
@@ -933,6 +933,12 @@ export class JobService {
         }
       }
 
+      // Archive/soft-delete any previous clips for this project so newly generated clips cleanly replace them
+      await prisma.clip.updateMany({
+        where: { projectId, isDeleted: false },
+        data: { isDeleted: true },
+      });
+
       await automaticClipGenerator.generateClips({
         jobId,
         projectId,
@@ -943,6 +949,7 @@ export class JobService {
         cropMode: CropMode.CENTER_CROP,
         subtitlePreset: SubtitlePreset.VIRAL_HIGHLIGHT,
         captionPosition: CaptionPosition.BOTTOM,
+        forceRerender: true,
         onClipRendered: async (done, total) => {
           const percent = 78 + Math.round((done / total) * 18);
           await this.updateJobStage(

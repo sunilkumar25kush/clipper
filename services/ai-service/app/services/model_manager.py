@@ -4,6 +4,19 @@ from app.config import settings
 
 logger = logging.getLogger("clipforge.model_manager")
 
+# Ensure PyAV compatibility with faster-whisper across all PyAV versions
+try:
+    import av
+    _orig_av_open = av.open
+
+    def _patched_av_open(*args, **kwargs):
+        kwargs.pop("metadata_errors", None)
+        return _orig_av_open(*args, **kwargs)
+
+    av.open = _patched_av_open
+except Exception as e:
+    logger.debug(f"PyAV patch skipped: {e}")
+
 class ModelManager:
     """
     Singleton manager for Whisper and Pyannote AI models.
@@ -74,9 +87,24 @@ class ModelManager:
                 cpu_threads=settings.max_workers,
             )
             self._whisper_models[target_size] = model
-            logger.info(f"Successfully loaded Whisper model '{target_size}' into memory.")
+            logger.info(f"Successfully loaded Whisper model '{target_size}' on device='{device}'.")
             return model
         except Exception as e:
+            if device != "cpu":
+                logger.warning(f"Device '{device}' failed ({e}). Automatically falling back to CPU with int8...")
+                try:
+                    model = WhisperModel(
+                        target_size,
+                        device="cpu",
+                        compute_type="int8",
+                        cpu_threads=settings.max_workers,
+                    )
+                    self._whisper_models[target_size] = model
+                    logger.info(f"Successfully loaded Whisper model '{target_size}' on CPU.")
+                    return model
+                except Exception as cpu_err:
+                    logger.error(f"CPU fallback for WhisperModel '{target_size}' also failed: {cpu_err}")
+                    raise cpu_err
             logger.error(f"Failed to load WhisperModel '{target_size}': {e}")
             raise
 
