@@ -195,15 +195,24 @@ export const VideoPreviewPlayer: React.FC<VideoPreviewPlayerProps> = ({
           </div>
         </button>
 
-        {/* Live Subtitle Overlay Preview - ONLY displays spoken dialogue captions, NEVER titles */}
-        {showCaptions && captionText && (
+        {/* Mask bottom burned-in subtitles when captions are turned off OR when position is moved to Top/Center */}
+        {(!showCaptions || captionPosition === "TOP" || captionPosition === "CENTER") && (
+          <div className="absolute left-0 right-0 bottom-6 h-20 bg-black/95 pointer-events-none transition-all flex items-center justify-center">
+            {!showCaptions && (
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+                Captions Off
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Live Subtitle Overlay Preview - ONLY displayed when position is customized to TOP or CENTER (to avoid double caption over bottom burned subtitles) */}
+        {showCaptions && (captionPosition === "TOP" || captionPosition === "CENTER") && captionText && (
           <div
             className={`absolute left-0 right-0 px-4 text-center pointer-events-none transition-all ${
               captionPosition === "TOP"
                 ? "top-8"
-                : captionPosition === "CENTER"
-                ? "top-1/2 -translate-y-1/2"
-                : "bottom-12"
+                : "top-1/2 -translate-y-1/2"
             }`}
           >
             <span
